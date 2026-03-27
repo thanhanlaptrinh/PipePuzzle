@@ -8,10 +8,9 @@ from screens import StartScreen, DashboardScreen, LevelSelectScreen, ShopScreen,
 def main():
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-    pygame.display.set_caption("PIPEMASTER PRO - Hoàn Thiện UI 100%")
+    pygame.display.set_caption("PIPEMASTER PRO - Chờ 3s Win Game")
     clock = pygame.time.Clock()
 
-    # Khởi tạo toàn bộ các màn hình
     start_screen = StartScreen()
     dashboard_screen = DashboardScreen()
     level_select_screen = LevelSelectScreen()
@@ -22,19 +21,27 @@ def main():
     win_popup = WinPopup()
     skin_screen = SkinScreen()
     
-    # Nút MENU trong game
     btn_options = Button(WINDOW_WIDTH - 120, 20, 100, 50, "MENU", INPUT_BOX_COLOR, TEXT_COLOR)
     
-    # Các biến hệ thống
     game_board = None 
     player_name = ""
     player_coins = 100
     current_state = STATE_MENU_NAME
     
-    # Các cờ (flag) kiểm soát Popup
+    # Nạp hình nền cho lúc chơi
+    try:
+        raw_game_bg = pygame.image.load(BG_GAME_PATH).convert()
+        game_bg = pygame.transform.scale(raw_game_bg, (WINDOW_WIDTH, WINDOW_HEIGHT))
+    except pygame.error as e:
+        print(f"Không tải được ảnh nền game: {e}")
+        game_bg = None
+    
+    # --- CÁC BIẾN QUẢN LÝ POPUP & THỜI GIAN CHỜ ---
     is_paused = False 
     show_tutorial = False 
     show_win = False
+    is_winning = False # Cờ báo hiệu: "Đã thắng rồi, đang trong thời gian chờ hiện bảng"
+    win_timer = 0      # Lưu lại thời điểm bắt đầu đếm ngược
 
     running = True
     while running:
@@ -42,19 +49,18 @@ def main():
         mouse_pos = pygame.mouse.get_pos()
         
         # ==========================================
-        # 1. BẮT SỰ KIỆN (CHUỘT, BÀN PHÍM)
+        # 1. BẮT SỰ KIỆN
         # ==========================================
         for event in events:
             if event.type == pygame.QUIT: running = False
             
-            # Nếu ở ngoài Menu
             if current_state == STATE_MENU_NAME: start_screen.handle_event(event)
             elif current_state == STATE_DASHBOARD: dashboard_screen.handle_event(event)
             elif current_state == STATE_LEVEL_SELECT: level_select_screen.handle_event(event)
             elif current_state == STATE_SHOP: shop_screen.handle_event(event)
             elif current_state == STATE_QUESTS: quests_screen.handle_event(event)
+            elif current_state == STATE_SKIN: skin_screen.handle_event(event)
             
-            # Nếu đang ở trong Màn Chơi
             elif current_state == STATE_GAME_PLAY:
                 if show_win:
                     win_popup.handle_event(event)
@@ -62,6 +68,9 @@ def main():
                     tutorial_popup.handle_event(event)
                 elif is_paused:
                     pause_menu.handle_event(event)
+                elif is_winning:
+                    # NẾU ĐANG CHỜ 3 GIÂY -> KHÔNG CHO CLICK CHUỘT LÀM RỐI ỐNG NƯỚC NỮA
+                    pass 
                 else:
                     # Chơi bình thường
                     btn_options.check_hover(mouse_pos)
@@ -75,15 +84,25 @@ def main():
                         is_paused = True
 
         # ==========================================
-        # 2. KIỂM TRA ĐIỀU KIỆN THẮNG LIÊN TỤC
+        # 2. KIỂM TRA ĐIỀU KIỆN THẮNG & ĐẾM NGƯỢC 3 GIÂY
         # ==========================================
         if current_state == STATE_GAME_PLAY and game_board:
-            if not show_win and not show_tutorial and not is_paused:
+            # Nếu chưa thắng và cũng chưa kích hoạt trạng thái đếm ngược
+            if not show_win and not show_tutorial and not is_paused and not is_winning:
                 if game_board.check_win():
-                    show_win = True
+                    is_winning = True # Kích hoạt thời gian chờ
+                    win_timer = pygame.time.get_ticks() # Bấm giờ ngay lúc này!
+                    
+            # Nếu đang trong trạng thái chờ 3s (is_winning đang True)
+            if is_winning:
+                current_time = pygame.time.get_ticks()
+                # Nếu thời gian hiện tại - thời gian lúc bắt đầu chờ >= 3000 mili-giây (3 giây)
+                if current_time - win_timer >= 3000:
+                    show_win = True    # Hiện bảng lên
+                    is_winning = False # Tắt trạng thái đếm ngược
 
         # ==========================================
-        # 3. XỬ LÝ LOGIC CHUYỂN CẢNH & NÚT BẤM
+        # 3. XỬ LÝ LOGIC CHUYỂN CẢNH
         # ==========================================
         if current_state == STATE_MENU_NAME and start_screen.next_state == STATE_DASHBOARD:
             player_name = start_screen.player_name
@@ -98,39 +117,43 @@ def main():
             if level_select_screen.next_state == STATE_GAME_PLAY:
                 game_board = Board(level_id=level_select_screen.selected_level) 
                 current_state = STATE_GAME_PLAY
-                show_tutorial = True  # Bật Hướng dẫn
+                show_tutorial = True  
                 is_paused = False 
                 show_win = False
+                is_winning = False # Reset cờ đếm giờ
                 level_select_screen.next_state = None
             elif level_select_screen.next_state == STATE_DASHBOARD:
                 current_state = STATE_DASHBOARD
                 level_select_screen.next_state = None
                 
+        elif current_state == STATE_SKIN and skin_screen.next_state == STATE_DASHBOARD:
+            current_state = STATE_DASHBOARD
+            skin_screen.next_state = None
+                
         elif current_state == STATE_GAME_PLAY:
-            # Xử lý nút khi Thắng
             if show_win:
                 if win_popup.action == "MENU":
                     current_state = STATE_LEVEL_SELECT
                     show_win = False
+                    is_winning = False
                     win_popup.action = None
                 elif win_popup.action == "NEXT":
-                    # Tự động nhảy sang level tiếp theo
                     level_select_screen.selected_level = (level_select_screen.selected_level % 10) + 1
                     game_board = Board(level_id=level_select_screen.selected_level)
                     show_win = False
-                    show_tutorial = True # Vẫn hiện hướng dẫn ở màn mới (bạn có thể đổi thành False nếu muốn)
+                    is_winning = False
+                    show_tutorial = True
                     win_popup.action = None
                     
-            # Xử lý nút khi Hướng dẫn
             elif show_tutorial and tutorial_popup.action == "UNDERSTOOD":
                 show_tutorial = False
                 tutorial_popup.action = None
                 
-            # Xử lý nút khi Tạm dừng
             elif is_paused:
                 if pause_menu.action == "RESTART":
                     game_board = Board(level_id=level_select_screen.selected_level)
                     is_paused = False
+                    is_winning = False
                     pause_menu.action = None
                 elif pause_menu.action == "AI_SOLVE":
                     print(">>> Gọi Thuật toán AI Hill Climbing...")
@@ -139,29 +162,32 @@ def main():
                 elif pause_menu.action == "EXIT":
                     current_state = STATE_LEVEL_SELECT
                     is_paused = False
+                    is_winning = False
                     pause_menu.action = None
 
         # ==========================================
         # 4. VẼ TẤT CẢ LÊN MÀN HÌNH
         # ==========================================
-        screen.fill(BG_COLOR)
         if current_state == STATE_MENU_NAME: start_screen.draw(screen)
         elif current_state == STATE_DASHBOARD: dashboard_screen.draw(screen, player_name, player_coins)
-        elif current_state == STATE_LEVEL_SELECT: level_select_screen.draw(screen)
+        elif current_state == STATE_LEVEL_SELECT:
+            if game_bg: screen.blit(game_bg, (0, 0))
+            else: screen.fill(BG_COLOR)
+            level_select_screen.draw(screen)
         elif current_state == STATE_SHOP: shop_screen.draw(screen)
         elif current_state == STATE_QUESTS: quests_screen.draw(screen)
+        elif current_state == STATE_SKIN: skin_screen.draw(screen)
         
         elif current_state == STATE_GAME_PLAY and game_board:
+            if game_bg: screen.blit(game_bg, (0, 0))
+            else: screen.fill(BG_COLOR)
+            
             game_board.draw(screen)
             btn_options.draw(screen)
             
-            # Ưu tiên vẽ màng đè theo thứ tự: Thắng -> Hướng Dẫn -> Tạm dừng
-            if show_win:
-                win_popup.draw(screen)
-            elif show_tutorial:
-                tutorial_popup.draw(screen)
-            elif is_paused:
-                pause_menu.draw(screen)
+            if show_win: win_popup.draw(screen)
+            elif show_tutorial: tutorial_popup.draw(screen)
+            elif is_paused: pause_menu.draw(screen)
 
         pygame.display.flip()
         clock.tick(FPS)

@@ -119,53 +119,97 @@ class Board:
     def draw(self, screen):
         offset_x = (WINDOW_WIDTH - (COLS * TILE_SIZE)) // 2
         offset_y = (WINDOW_HEIGHT - (ROWS * TILE_SIZE)) // 2
-        font_io = pygame.font.SysFont('tahoma', 16, bold=True)
+
+        panel = pygame.Surface((COLS * TILE_SIZE + 40, ROWS * TILE_SIZE + 40), pygame.SRCALPHA)
+        pygame.draw.rect(panel, (30, 35, 45, 210), panel.get_rect(), border_radius=15) # Màu xám xanh trong suốt
+        pygame.draw.rect(panel, (100, 100, 100), panel.get_rect(), 3, border_radius=15) # Viền thép
+        screen.blit(panel, (offset_x - 20, offset_y - 20))
 
         for row in range(ROWS):
             for col in range(COLS):
                 x = offset_x + col * TILE_SIZE
                 y = offset_y + row * TILE_SIZE
                 rect = pygame.Rect(x, y, TILE_SIZE, TILE_SIZE)
-                pygame.draw.rect(screen, GRID_COLOR, rect, 1) # Vẽ viền
+                
+                # 1. Làm mờ viền ô lưới cho ống nước nổi bật hơn
+                pygame.draw.rect(screen, (50, 50, 50), rect, 1)
 
-                # Vẽ nền IN/OUT
+                # 2. Vẽ nền IN/OUT
                 if row == 0 and col == 0: pygame.draw.rect(screen, (50, 60, 80), rect.inflate(-2, -2))
                 elif row == ROWS - 1 and col == COLS - 1: pygame.draw.rect(screen, (40, 40, 40), rect.inflate(-2, -2))
 
                 node = self.grid[row][col]
                 
-                # --- LOGIC HOẠT ẢNH MƯỢT MÀ ---
-                # Trượt từ từ góc hiện tại về góc mục tiêu (Tốc độ xoay 0.3)
+                # --- LOGIC HOẠT ẢNH XOAY ---
                 if abs(node.target_angle - node.angle) > 0.1:
                     node.angle += (node.target_angle - node.angle) * 0.3
                 else:
                     node.angle = node.target_angle
 
-                # Vẽ ống nước lên một TẤM KÍNH trong suốt (Surface) thay vì vẽ thẳng lên screen
                 pipe_surface = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
                 center = TILE_SIZE // 2
-                thickness = 12
                 
-                draw_color = PIPE_COLOR_ON if node.is_powered else PIPE_COLOR_OFF
-                circle_radius = thickness // 2 + 2 if node.is_powered else thickness // 2
+                # =======================================================
+                # BỘ THÔNG SỐ VẼ ỐNG XỊN SÒ (GIỐNG HÌNH NỀN)
+                # =======================================================
+                outer_w = 24  # Độ dày viền ngoài
+                metal_w = 18  # Độ dày thân kim loại
+                water_w = 8   # Độ dày lõi nước
+                flange_w = 30 # Độ rộng khớp nối (đầu ống)
+                flange_t = 5  # Độ dày khớp nối
                 
-                # VẼ HÌNH DÁNG GỐC LÊN TẤM KÍNH
-                pygame.draw.circle(pipe_surface, draw_color, (center, center), circle_radius)
-                if node.base_connections[0]: pygame.draw.line(pipe_surface, draw_color, (center, center), (center, 0), thickness)
-                if node.base_connections[1]: pygame.draw.line(pipe_surface, draw_color, (center, center), (TILE_SIZE, center), thickness)
-                if node.base_connections[2]: pygame.draw.line(pipe_surface, draw_color, (center, center), (center, TILE_SIZE), thickness)
-                if node.base_connections[3]: pygame.draw.line(pipe_surface, draw_color, (center, center), (0, center), thickness)
+                c_border = (30, 35, 40)   # Viền đen/xám đậm
+                c_metal = (140, 150, 160) # Thân Kim loại xám
+                c_water = (0, 230, 255) if node.is_powered else (70, 80, 90) # Nước xanh neon hoặc cạn khô
+                c_brass = (210, 150, 50)  # Màu đồng thau (vàng cam) cho cụm giữa
+                
+                dirs = node.base_connections
+                
+                # LỚP 1: Vẽ Viền Đen Bao Ngoài
+                pygame.draw.circle(pipe_surface, c_border, (center, center), outer_w // 2)
+                for i, has_conn in enumerate(dirs):
+                    if has_conn:
+                        end_pos = [(center, 0), (TILE_SIZE, center), (center, TILE_SIZE), (0, center)][i]
+                        pygame.draw.line(pipe_surface, c_border, (center, center), end_pos, outer_w)
 
-                # XOAY TẤM KÍNH THEO GÓC VÀ DÁN VÀO MÀN HÌNH
+                # LỚP 2: Vẽ Thân Kim Loại Xám
+                pygame.draw.circle(pipe_surface, c_metal, (center, center), metal_w // 2)
+                for i, has_conn in enumerate(dirs):
+                    if has_conn:
+                        end_pos = [(center, 0), (TILE_SIZE, center), (center, TILE_SIZE), (0, center)][i]
+                        pygame.draw.line(pipe_surface, c_metal, (center, center), end_pos, metal_w)
+
+                # LỚP 3: Vẽ Lõi Nước Ở Giữa
+                pygame.draw.circle(pipe_surface, c_water, (center, center), water_w // 2)
+                for i, has_conn in enumerate(dirs):
+                    if has_conn:
+                        end_pos = [(center, 0), (TILE_SIZE, center), (center, TILE_SIZE), (0, center)][i]
+                        pygame.draw.line(pipe_surface, c_water, (center, center), end_pos, water_w)
+
+                # LỚP 4: Vẽ Khớp Nối (Flanges) ở các đầu cắm
+                for i, has_conn in enumerate(dirs):
+                    if has_conn:
+                        if i == 0: pygame.draw.rect(pipe_surface, c_border, (center - flange_w//2, 0, flange_w, flange_t))
+                        if i == 1: pygame.draw.rect(pipe_surface, c_border, (TILE_SIZE - flange_t, center - flange_w//2, flange_t, flange_w))
+                        if i == 2: pygame.draw.rect(pipe_surface, c_border, (center - flange_w//2, TILE_SIZE - flange_t, flange_w, flange_t))
+                        if i == 3: pygame.draw.rect(pipe_surface, c_border, (0, center - flange_w//2, flange_t, flange_w))
+
+                # LỚP 5: Vẽ Trục Van Đồng Thau (Chỉ dành cho ống cong L, ngã ba T, ngã tư +)
+                if node.pipe_type in ['L', 'T', '+']:
+                    pygame.draw.circle(pipe_surface, c_border, (center, center), metal_w // 2 + 2)
+                    pygame.draw.circle(pipe_surface, c_brass, (center, center), metal_w // 2)
+                    pygame.draw.circle(pipe_surface, c_water, (center, center), water_w // 2)
+
+                # XOAY VÀ DÁN LÊN MÀN HÌNH CHÍNH
                 rotated_surface = pygame.transform.rotate(pipe_surface, node.angle)
                 rot_rect = rotated_surface.get_rect(center=(x + center, y + center))
                 screen.blit(rotated_surface, rot_rect)
 
-                # --- VẼ VAN IN/OUT ĐÈ LÊN TRÊN CÙNG (Không bị xoay theo) ---
+                # --- VẼ CỐ ĐỊNH VAN IN/OUT ĐÈ LÊN TRÊN CÙNG ---
                 if row == 0 and col == 0:
                     cx, cy = x + TILE_SIZE // 2, y + TILE_SIZE // 2
-                    pygame.draw.circle(screen, (200, 200, 255), (cx, cy), circle_radius + 6, 2)
-                    pygame.draw.circle(screen, (255, 100, 100), (cx, cy), circle_radius + 3, 2)
+                    pygame.draw.circle(screen, (200, 200, 255), (cx, cy), metal_w // 2 + 6, 2)
+                    pygame.draw.circle(screen, (255, 100, 100), (cx, cy), metal_w // 2 + 3, 2)
                 elif row == ROWS - 1 and col == COLS - 1:
                     cx, cy = x + TILE_SIZE // 2, y + TILE_SIZE // 2
                     pygame.draw.circle(screen, (80, 80, 80), (cx, cy), TILE_SIZE // 2 - 8, 2)

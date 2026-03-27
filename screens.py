@@ -30,15 +30,34 @@ class Button:
 class StartScreen:
     def __init__(self):
         self.player_name = ""
+        # Tăng cỡ chữ và in đậm cho rõ nét
+        self.font_title = pygame.font.SysFont('tahoma', 75, bold=True)
+        self.font_sub = pygame.font.SysFont('tahoma', 32, bold=True)
         
-        # --- CẬP NHẬT Ở ĐÂY ---
-        self.font_main = pygame.font.SysFont('tahoma', 60)
-        self.font_sub = pygame.font.SysFont('tahoma', 32)
+        self.background = None
+        try:
+            raw_bg = pygame.image.load(BG_START_PATH).convert()
+            self.background = pygame.transform.scale(raw_bg, (WINDOW_WIDTH, WINDOW_HEIGHT))
+        except pygame.error as e:
+            print(f"Warning: Không thể tải hình nền {BG_START_PATH}. Lỗi: {e}")
+
+        # Căn chỉnh lại tọa độ ô nhập tên cho nằm ngay chính giữa tỷ lệ vàng
+        center_x = WINDOW_WIDTH // 2
+        center_y = WINDOW_HEIGHT // 2
+        self.input_rect = pygame.Rect(center_x - 175, center_y - 20, 350, 60) # Mở rộng ô một chút
         
-        self.input_rect = pygame.Rect(WINDOW_WIDTH//2 - 150, WINDOW_HEIGHT//2 - 30, 300, 60)
         self.cursor_visible = True
         self.cursor_timer = 0
         self.next_state = STATE_MENU_NAME 
+
+    # --- HÀM VẼ CHỮ CÓ ĐỔ BÓNG ĐỂ NỔI BẬT TRÊN MỌI NỀN ---
+    def draw_shadow_text(self, screen, text, font, color, center_pos):
+        # 1. Vẽ bóng đen đằng sau (lệch 3 pixel)
+        shadow = font.render(text, True, (0, 0, 0))
+        screen.blit(shadow, shadow.get_rect(center=(center_pos[0] + 3, center_pos[1] + 3)))
+        # 2. Vẽ chữ màu thật đè lên trên
+        main_text = font.render(text, True, color)
+        screen.blit(main_text, main_text.get_rect(center=center_pos))
 
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
@@ -53,35 +72,45 @@ class StartScreen:
                         self.player_name += event.unicode
 
     def draw(self, screen):
-        screen.fill(BG_COLOR)
-        title_surf = self.font_main.render("PIPE PUZZLE CYBER", True, PIPE_COLOR_ON)
-        screen.blit(title_surf, title_surf.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2 - 120)))
+        if self.background:
+            screen.blit(self.background, (0, 0))
+        else:
+            screen.fill(BG_COLOR)
+            
+        center_x = WINDOW_WIDTH // 2
+        center_y = WINDOW_HEIGHT // 2
+
+        # 1. Vẽ Tiêu đề có bóng đen
+        self.draw_shadow_text(screen, "PIPE PUZZLE", self.font_title, PIPE_COLOR_ON, (center_x, center_y - 130))
         
-        instr_surf = self.font_sub.render("Enter your name (Max 12 char):", True, TEXT_COLOR)
-        screen.blit(instr_surf, instr_surf.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2 - 60)))
+        # 2. Vẽ Hướng dẫn có bóng đen (Việt hóa luôn cho đồng bộ)
+        self.draw_shadow_text(screen, "Nhập tên của bạn (Tối đa 12 ký tự):", self.font_sub, TEXT_COLOR, (center_x, center_y - 65))
         
-        pygame.draw.rect(screen, INPUT_BOX_COLOR, self.input_rect, 0, 10)
-        pygame.draw.rect(screen, GRID_COLOR, self.input_rect, 2, 10)
+        # 3. Vẽ ô nhập tên (Thêm viền Neon)
+        pygame.draw.rect(screen, INPUT_BOX_COLOR, self.input_rect, 0, 15) # Nền xám, bo góc
+        pygame.draw.rect(screen, PIPE_COLOR_ON, self.input_rect, 3, 15)   # Viền Neon xanh rực
         
-        # --- VẼ TÊN ---
-        name_surf = self.font_sub.render(self.player_name, True, TEXT_COLOR)
-        # Sửa lại center để tên căn giữa ô
-        name_rect = name_surf.get_rect(center=self.input_rect.center)
-        screen.blit(name_surf, name_rect)
-        
+        # 4. Vẽ tên người chơi
+        if len(self.player_name) > 0:
+            name_surf = self.font_sub.render(self.player_name, True, TEXT_COLOR)
+            name_rect = name_surf.get_rect(center=self.input_rect.center)
+            screen.blit(name_surf, name_rect)
+        else:
+            name_rect = pygame.Rect(self.input_rect.centerx, self.input_rect.centery, 0, 0)
+            
+        # 5. Con trỏ nhấp nháy
         self.cursor_timer += 1
         if self.cursor_timer >= 30:
             self.cursor_visible = not self.cursor_visible
             self.cursor_timer = 0
             
         if self.cursor_visible:
-            cursor_x = name_rect.right + 2 if len(self.player_name) > 0 else self.input_rect.centerx
-            pygame.draw.line(screen, TEXT_COLOR, (cursor_x, self.input_rect.centery - 15), (cursor_x, self.input_rect.centery + 15), 2)
+            cursor_x = name_rect.right + 5 if len(self.player_name) > 0 else self.input_rect.centerx
+            pygame.draw.line(screen, TEXT_COLOR, (cursor_x, self.input_rect.centery - 18), (cursor_x, self.input_rect.centery + 18), 3)
             
+        # 6. Chữ Hint khi đã nhập tên
         if len(self.player_name) > 0:
-            # --- VẼ CHỮ TIẾNG VIỆT ---
-            hint_surf = self.font_sub.render("Nhấn ENTER để bắt đầu", True, HIGHLIGHT_COLOR)
-            screen.blit(hint_surf, hint_surf.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2 + 80)))
+            self.draw_shadow_text(screen, "Nhấn ENTER để bắt đầu", self.font_sub, HIGHLIGHT_COLOR, (center_x, center_y + 80))
 
 class DashboardScreen:
     def __init__(self):
@@ -159,8 +188,12 @@ class LevelSelectScreen:
                     self.next_state = STATE_GAME_PLAY
 
     def draw(self, screen):
-        screen.fill(BG_COLOR)
+        
         # --- VẼ CHỮ TIẾNG VIỆT ---
+        overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150)) # Đen mờ 60%
+        screen.blit(overlay, (0, 0))
+
         title_surf = self.font_title.render("CHỌN MÀN CHƠI", True, TEXT_COLOR)
         screen.blit(title_surf, title_surf.get_rect(center=(WINDOW_WIDTH//2, 100)))
         self.btn_back.draw(screen)

@@ -16,6 +16,8 @@ PIPE_COLOR_ON = (0, 255, 255) # Xanh Neon
 TEXT_COLOR = (255, 255, 255)
 HIGHLIGHT_COLOR = (255, 255, 0)
 INPUT_BOX_COLOR = (50, 50, 50)
+BG_START_PATH = "assets/images/game_bg.png"
+BG_GAME_PATH = "assets/images/game_bg.png"
 
 # Các trạng thái luồng game
 STATE_MENU_NAME = 0
