@@ -148,7 +148,7 @@ def main():
                     is_winning = False
                     win_popup.action = None
                 elif win_popup.action == "NEXT":
-                    level_select_screen.selected_level = (level_select_screen.selected_level % 10) + 1
+                    level_select_screen.selected_level = (level_select_screen.selected_level % 12) + 1
                     game_board = Board(level_id=level_select_screen.selected_level)
                     show_win = False
                     is_winning = False

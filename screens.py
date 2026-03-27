@@ -158,16 +158,20 @@ class DashboardScreen:
 
 class LevelSelectScreen:
     def __init__(self):
-        # --- CẬP NHẬT Ở ĐÂY ---
         self.font_title = pygame.font.SysFont('tahoma', 60)
         self.buttons = []
         self.next_state = None
         self.selected_level = 1
 
-        for i in range(10):
-            row = i // 5
-            col = i % 5
-            btn = Button(100 + col * 130, 200 + row * 150, 100, 100, f"{i+1}", PIPE_COLOR_ON, (0, 0, 0))
+        start_x = 125   # Canh lề trái dịch vào trong một chút
+        start_y = 220   # Canh lề trên
+        spacing_x = 130 # Khoảng cách giữa các cột
+        spacing_y = 150 
+
+        for i in range(12):
+            row = i // 6
+            col = i % 6
+            btn = Button(start_x + col * spacing_x, start_y + row * spacing_y, 100, 100, f"{i+1}", PIPE_COLOR_ON, (0, 0, 0))
             self.buttons.append((i+1, btn))
         
         self.btn_back = Button(20, 20, 150, 50, "QUAY LẠI", INPUT_BOX_COLOR, TEXT_COLOR)
@@ -191,7 +195,7 @@ class LevelSelectScreen:
         
         # --- VẼ CHỮ TIẾNG VIỆT ---
         overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 150)) # Đen mờ 60%
+        overlay.fill((0, 0, 0, 150))
         screen.blit(overlay, (0, 0))
 
         title_surf = self.font_title.render("CHỌN MÀN CHƠI", True, TEXT_COLOR)
