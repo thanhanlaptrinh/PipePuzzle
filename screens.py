@@ -338,3 +338,46 @@ class SkinScreen:
         screen.fill(BG_COLOR)
         screen.blit(self.font.render("CHỌN SKIN (Tính năng đang phát triển)", True, HIGHLIGHT_COLOR), (WINDOW_WIDTH//2 - 300, 300))
         self.btn_back.draw(screen)
+
+class ShopScreen:
+    def __init__(self):
+        self.next_state = None
+        self.font = pygame.font.SysFont('tahoma', 40, bold=True)
+        # Nút Quay lại góc trên bên trái
+        self.btn_back = Button(20, 20, 150, 50, "QUAY LẠI", INPUT_BOX_COLOR, TEXT_COLOR)
+
+    def handle_event(self, event):
+        mouse_pos = pygame.mouse.get_pos()
+        self.btn_back.check_hover(mouse_pos)
+        
+        # Bắt sự kiện click vào nút
+        if event.type == pygame.MOUSEBUTTONDOWN and self.btn_back.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
+            self.next_state = STATE_DASHBOARD
+
+    def draw(self, screen): 
+        screen.fill(BG_COLOR)
+        # Bố trí dòng chữ ngay chính giữa cho đẹp
+        text_surf = self.font.render("CỬA HÀNG (Tính năng đang phát triển)", True, (50, 150, 200))
+        screen.blit(text_surf, text_surf.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2)))
+        self.btn_back.draw(screen)
+
+class QuestsScreen:
+    def __init__(self):
+        self.next_state = None
+        self.font = pygame.font.SysFont('tahoma', 40, bold=True)
+        # Nút Quay lại góc trên bên trái
+        self.btn_back = Button(20, 20, 150, 50, "QUAY LẠI", INPUT_BOX_COLOR, TEXT_COLOR)
+
+    def handle_event(self, event):
+        mouse_pos = pygame.mouse.get_pos()
+        self.btn_back.check_hover(mouse_pos)
+        
+        # Bắt sự kiện click vào nút
+        if event.type == pygame.MOUSEBUTTONDOWN and self.btn_back.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
+            self.next_state = STATE_DASHBOARD
+
+    def draw(self, screen): 
+        screen.fill(BG_COLOR)
+        text_surf = self.font.render("NHIỆM VỤ (Tính năng đang phát triển)", True, (150, 100, 200))
+        screen.blit(text_surf, text_surf.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2)))
+        self.btn_back.draw(screen)

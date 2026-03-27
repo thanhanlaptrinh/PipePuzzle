@@ -60,6 +60,8 @@ def main():
             elif current_state == STATE_SHOP: shop_screen.handle_event(event)
             elif current_state == STATE_QUESTS: quests_screen.handle_event(event)
             elif current_state == STATE_SKIN: skin_screen.handle_event(event)
+
+
             
             elif current_state == STATE_GAME_PLAY:
                 if show_win:
@@ -129,6 +131,14 @@ def main():
         elif current_state == STATE_SKIN and skin_screen.next_state == STATE_DASHBOARD:
             current_state = STATE_DASHBOARD
             skin_screen.next_state = None
+        
+        elif current_state == STATE_SHOP and shop_screen.next_state == STATE_DASHBOARD:
+            current_state = STATE_DASHBOARD
+            shop_screen.next_state = None
+            
+        elif current_state == STATE_QUESTS and quests_screen.next_state == STATE_DASHBOARD:
+            current_state = STATE_DASHBOARD
+            quests_screen.next_state = None
                 
         elif current_state == STATE_GAME_PLAY:
             if show_win:
