@@ -3,31 +3,40 @@ import json
 import os
 import pygame
 import sys
+import random
 from settings import *
 from board import Board
 from hill_climbing import get_best_single_rotation
 from screens import StartScreen, DashboardScreen, LevelSelectScreen, ShopScreen, QuestsScreen, PauseMenu, TutorialPopup, WinPopup, Button, SkinScreen
 
+# main.py (Thay thế đoạn đầu file)
+
 SAVE_FILE = "save_data.json"
 
 def load_progress():
-    """Tải tiến độ người chơi. Mặc định mới chơi là mở khóa Level 1."""
+    """Tải toàn bộ tiến độ: Level, Xu, Tên, và Danh sách Mã đã dùng"""
     if os.path.exists(SAVE_FILE):
         try:
-            with open(SAVE_FILE, 'r') as f:
+            with open(SAVE_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data.get('unlocked_levels', 1)
+                return data.get('unlocked_levels', 1), data.get('coins', 100), data.get('player_name', ""), data.get('redeemed_codes', [])
         except:
-            return 1
-    return 1
+            pass
+    return 1, 100, "", [] # Trả về list rỗng nếu chưa nhập mã nào
 
-def save_progress(level):
-    """Lưu tiến độ khi qua màn mới hoặc nhập code."""
-    with open(SAVE_FILE, 'w') as f:
-        json.dump({'unlocked_levels': level}, f)
+def save_progress(level, coins, name, redeemed_codes):
+    """Lưu toàn bộ dữ liệu vào két sắt"""
+    data = {
+        'unlocked_levels': level,
+        'coins': coins,
+        'player_name': name,
+        'redeemed_codes': redeemed_codes
+    }
+    with open(SAVE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
 
 # KHỞI TẠO BIẾN TOÀN CỤC CHO TIẾN ĐỘ
-unlocked_levels = load_progress()
+unlocked_levels, global_coins, global_name, redeemed_codes = load_progress()
 MAX_LEVELS = 60
 
 def main():
@@ -50,9 +59,19 @@ def main():
     btn_options = Button(WINDOW_WIDTH - 120, 20, 100, 50, "MENU", INPUT_BOX_COLOR, TEXT_COLOR)
     
     game_board = None 
-    player_name = ""
-    player_coins = 100
-    current_state = STATE_MENU_NAME
+    
+    # ==================================================
+    # 1. FIX: NẠP DỮ LIỆU TỪ "KÉT SẮT" VÀO GAME
+    # ==================================================
+    player_name = global_name   # Tên tải từ save_data
+    player_coins = global_coins # Xu tải từ save_data
+    
+    # TỰ ĐỘNG BỎ QUA MÀN NHẬP TÊN NẾU ĐÃ CHƠI TỪ TRƯỚC
+    if player_name != "":
+        current_state = STATE_DASHBOARD
+    else:
+        current_state = STATE_MENU_NAME
+    # ==================================================
     
     # Nạp hình nền cho lúc chơi
     try:
@@ -86,10 +105,20 @@ def main():
                 start_screen.handle_event(event)
 
             elif current_state == STATE_DASHBOARD: 
-                action = dashboard_screen.handle_event(event)
+                action = dashboard_screen.handle_event(event, redeemed_codes)
                 if action == "UNLOCK_ALL":
-                    unlocked_levels = MAX_LEVELS 
-                    save_progress(unlocked_levels) 
+                    unlocked_levels = MAX_LEVELS
+                    if "UNPIPE" not in redeemed_codes: 
+                        redeemed_codes.append("UNPIPE")
+                    # ---> THÊM redeemed_codes VÀO ĐÂY <---
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes) 
+                    
+                elif action == "ADD_COINS":
+                    player_coins += 10000 
+                    if "PIPEGOLD" not in redeemed_codes:
+                        redeemed_codes.append("PIPEGOLD")
+                    # ---> THÊM redeemed_codes VÀO ĐÂY <---
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes)
                     
             elif current_state == STATE_LEVEL_SELECT: 
                 # Bỏ cái đón giftcode đi, giờ chỉ xử lý click chọn màn thôi
@@ -142,6 +171,10 @@ def main():
                 if game_board.check_win():
                     is_winning = True 
                     win_timer = pygame.time.get_ticks() 
+                    earned = random.randint(1000, 1500)
+                    player_coins += earned
+                    win_popup.earned_coins = earned # Gửi số tiền sang bảng Win để khoe
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes)
                     
             if is_winning:
                 current_time = pygame.time.get_ticks()
@@ -156,6 +189,7 @@ def main():
             player_name = start_screen.player_name
             current_state = STATE_DASHBOARD
             start_screen.next_state = STATE_MENU_NAME 
+            save_progress(unlocked_levels, player_coins, player_name, redeemed_codes)
             
         elif current_state == STATE_DASHBOARD and dashboard_screen.next_state is not None:
             current_state = dashboard_screen.next_state
@@ -199,7 +233,7 @@ def main():
                     # Mở khóa màn mới
                     if level_select_screen.selected_level == unlocked_levels and unlocked_levels < MAX_LEVELS:
                         unlocked_levels += 1
-                        save_progress(unlocked_levels) 
+                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes)  
 
                     level_select_screen.selected_level = (level_select_screen.selected_level % MAX_LEVELS) + 1
                     game_board = Board(level_id=level_select_screen.selected_level)

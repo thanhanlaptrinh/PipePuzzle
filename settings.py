@@ -18,6 +18,7 @@ HIGHLIGHT_COLOR = (255, 255, 0)
 INPUT_BOX_COLOR = (50, 50, 50)
 BG_START_PATH = "assets/images/game_bg.png"
 BG_GAME_PATH = "assets/images/game_bg.png"
+IMG_MONEY_PATH = "assets/money_chip.png"
 
 # Các trạng thái luồng game
 STATE_MENU_NAME = 0

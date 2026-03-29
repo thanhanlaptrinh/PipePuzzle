@@ -155,23 +155,47 @@ class DashboardScreen:
         self.btn_quests = Button(WINDOW_WIDTH//2 - 150, 430, 300, 60, "NHIỆM VỤ", (155, 89, 182), (255, 255, 255))
         self.btn_skin = Button(WINDOW_WIDTH - 150, WINDOW_HEIGHT - 80, 120, 50, "SKIN", (241, 196, 15), (0, 0, 0))
         
-        # ---> NÚT GIFTCODE NẰM Ở ĐÂY RỒI NHÉ SẾP <---
         self.btn_giftcode = Button(30, WINDOW_HEIGHT - 80, 160, 50, "GIFTCODE", (155, 89, 182), (255, 255, 255))
         self.show_giftcode_popup = False
         self.giftcode_input = ""
+        
+        # Đã xóa phần load ảnh rườm rà
+        self.notifications = [] 
 
-    def handle_event(self, event):
+    def handle_event(self, event, redeemed_codes):
         mouse_pos = pygame.mouse.get_pos()
         mouse_pressed = pygame.mouse.get_pressed()
 
-        # Xử lý Popup Giftcode
         if self.show_giftcode_popup:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
-                    if self.giftcode_input.upper() == "HACKERPRO":
+                    code = self.giftcode_input.upper()
+                    
+                    if code in redeemed_codes:
+                        self.notifications.append({'text': "MÃ NÀY ĐÃ SỬ DỤNG!", 'x': WINDOW_WIDTH//2, 'y': WINDOW_HEIGHT//2, 'alpha': 255, 'color': (231, 76, 60)})
+                        self.show_giftcode_popup = False
+                        self.giftcode_input = ""
+                        return None
+                        
+                    elif code == "UNPIPE":
+                        self.notifications.append({'text': "ĐÃ MỞ KHÓA MAX LEVEL!", 'x': WINDOW_WIDTH//2, 'y': WINDOW_HEIGHT//2, 'alpha': 255, 'color': (46, 204, 113)})
+                        self.show_giftcode_popup = False
+                        self.giftcode_input = ""
                         return "UNLOCK_ALL"
-                    self.show_giftcode_popup = False
-                    self.giftcode_input = ""
+                        
+                    elif code == "PIPEGOLD":
+                        # Trở về với chữ COIN thân thương
+                        self.notifications.append({'text': "+10.000 COIN", 'x': WINDOW_WIDTH//2, 'y': WINDOW_HEIGHT//2, 'alpha': 255, 'color': (255, 215, 0)})
+                        self.show_giftcode_popup = False
+                        self.giftcode_input = ""
+                        return "ADD_COINS"
+                        
+                    else:
+                        self.notifications.append({'text': "MÃ KHÔNG HỢP LỆ!", 'x': WINDOW_WIDTH//2, 'y': WINDOW_HEIGHT//2, 'alpha': 255, 'color': (231, 76, 60)})
+                        self.show_giftcode_popup = False
+                        self.giftcode_input = ""
+                        return None
+                        
                 elif event.key == pygame.K_BACKSPACE:
                     self.giftcode_input = self.giftcode_input[:-1]
                 elif event.key == pygame.K_ESCAPE:
@@ -198,16 +222,16 @@ class DashboardScreen:
         return None
 
     def draw(self, screen, player_name, coins):
-        screen.fill((30, 30, 30)) # Sếp có thể thay bằng self.bg nếu sau này có nền
+        screen.fill((30, 30, 30)) 
         
         pygame.draw.rect(screen, (50, 50, 50), (0, 0, WINDOW_WIDTH, 80))
-        
         font_info = pygame.font.SysFont('tahoma', 32, bold=True)
         name_text = font_info.render(f"PLAYER: {player_name}", True, (255, 255, 255))
         screen.blit(name_text, (30, 20))
         
-        coins_text = font_info.render(f"XU: {coins}", True, (255, 215, 0))
-        screen.blit(coins_text, (WINDOW_WIDTH - 200, 20))
+        # Vẽ chữ COIN gọn gàng ở góc phải
+        coins_text = font_info.render(f"COIN: {coins}", True, (255, 215, 0))
+        screen.blit(coins_text, (WINDOW_WIDTH - 250, 20))
 
         title = self.font_title.render("PIPE PUZZLE", True, (0, 255, 255))
         screen.blit(title, title.get_rect(center=(WINDOW_WIDTH//2, 150)))
@@ -216,11 +240,9 @@ class DashboardScreen:
         self.btn_shop.draw(screen)
         self.btn_quests.draw(screen)
         self.btn_skin.draw(screen)
-        
-        # VẼ NÚT GIFTCODE
         self.btn_giftcode.draw(screen)
 
-        # VẼ POPUP
+        # Popup nhập mã
         if self.show_giftcode_popup:
             overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 180))
@@ -242,6 +264,21 @@ class DashboardScreen:
             font_btn = pygame.font.SysFont('tahoma', 24, bold=True)
             txt_hint = font_btn.render("Ấn ENTER để xác nhận", True, (150, 150, 150))
             screen.blit(txt_hint, txt_hint.get_rect(center=(WINDOW_WIDTH//2, box_y + 160)))
+
+        # Thông báo bay lên
+        font_notif = pygame.font.SysFont('tahoma', 45, bold=True)
+        for notif in self.notifications[:]: 
+            txt_surface = font_notif.render(notif['text'], True, notif['color'])
+            txt_surface.set_alpha(notif['alpha']) 
+            
+            rect = txt_surface.get_rect(center=(notif['x'], notif['y']))
+            screen.blit(txt_surface, rect)
+            
+            notif['y'] -= 2       
+            notif['alpha'] -= 4   
+            
+            if notif['alpha'] <= 0:
+                self.notifications.remove(notif)
 
 
 class LevelSelectScreen:
@@ -364,31 +401,9 @@ class PauseMenu:
 
     def draw(self, screen):
         screen.blit(self.overlay, (0, 0))
-        self.btn_restart.draw(screen); self.btn_ai.draw(screen); self.btn_exit.draw(screen)
-
-        self.btn_giftcode.draw(screen)
-
-        if self.show_giftcode_popup:
-            overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 180))
-            screen.blit(overlay, (0, 0))
-            
-            box_w, box_h = 400, 200
-            box_x, box_y = (WINDOW_WIDTH - box_w)//2, (WINDOW_HEIGHT - box_h)//2
-            pygame.draw.rect(screen, (40, 45, 50), (box_x, box_y, box_w, box_h), border_radius=15)
-            pygame.draw.rect(screen, (155, 89, 182), (box_x, box_y, box_w, box_h), 4, border_radius=15)
-            
-            font_chapter = pygame.font.SysFont('tahoma', 36, bold=True)
-            txt_title = font_chapter.render("NHẬP MÃ BÍ MẬT:", True, (255, 255, 255))
-            screen.blit(txt_title, txt_title.get_rect(center=(WINDOW_WIDTH//2, box_y + 40)))
-            
-            pygame.draw.rect(screen, (20, 20, 20), (box_x + 20, box_y + 80, box_w - 40, 50))
-            txt_input = font_chapter.render(self.giftcode_input + "_", True, (255, 215, 0))
-            screen.blit(txt_input, (box_x + 30, box_y + 85))
-            
-            font_btn = pygame.font.SysFont('tahoma', 24, bold=True)
-            txt_hint = font_btn.render("Ấn ENTER để xác nhận", True, (150, 150, 150))
-            screen.blit(txt_hint, txt_hint.get_rect(center=(WINDOW_WIDTH//2, box_y + 160)))
+        self.btn_restart.draw(screen)
+        self.btn_ai.draw(screen)
+        self.btn_exit.draw(screen)
 
 class TutorialPopup:
     def __init__(self):
@@ -454,60 +469,48 @@ class QuestsScreen:
 
 class WinPopup:
     def __init__(self):
-        self.overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
-        self.overlay.set_alpha(220)
-        self.overlay.fill((0, 0, 0))
-        self.font = pygame.font.SysFont('tahoma', 50, bold=True) 
         self.action = None
+        self.earned_coins = 0 
         
-        self.popup_rect = pygame.Rect(WINDOW_WIDTH//2 - 250, WINDOW_HEIGHT//2 - 150, 500, 300)
-        
-        
-        # 2 nút MENU và CHƠI TIẾP
-        self.btn_next = Button(WINDOW_WIDTH//2 - 120, 250, 240, 60, "CHƠI TIẾP", (46, 204, 113), (255,255,255))
-        
-        # --- THÊM NÚT CHƠI LẠI Ở ĐÂY ---
-        self.btn_replay = Button(WINDOW_WIDTH//2 - 120, 330, 240, 60, "CHƠI LẠI", (230, 126, 34), (255,255,255)) 
-        
-        self.btn_menu = Button(WINDOW_WIDTH//2 - 120, 410, 240, 60, "VỀ MENU", (149, 165, 166), (255,255,255))
-        
+        self.btn_replay = Button(WINDOW_WIDTH//2 - 240, WINDOW_HEIGHT//2 + 60, 140, 50, "CHƠI LẠI", (52, 152, 219), (255, 255, 255))
+        self.btn_next = Button(WINDOW_WIDTH//2 - 70, WINDOW_HEIGHT//2 + 60, 140, 50, "TIẾP THEO", (46, 204, 113), (255, 255, 255))
+        self.btn_menu = Button(WINDOW_WIDTH//2 + 100, WINDOW_HEIGHT//2 + 60, 140, 50, "MENU", (231, 76, 60), (255, 255, 255))
 
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
         mouse_pressed = pygame.mouse.get_pressed()
         
+        self.btn_replay.check_hover(mouse_pos)
         self.btn_next.check_hover(mouse_pos)
-        self.btn_replay.check_hover(mouse_pos) # Nhớ check hover cho nút mới
         self.btn_menu.check_hover(mouse_pos)
         
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if self.btn_next.is_clicked(mouse_pos, mouse_pressed):
-                self.action = "NEXT"
-            elif self.btn_replay.is_clicked(mouse_pos, mouse_pressed): # BẮT SỰ KIỆN CLICK
-                self.action = "REPLAY"
-            elif self.btn_menu.is_clicked(mouse_pos, mouse_pressed):
-                self.action = "MENU"
+            if self.btn_replay.is_clicked(mouse_pos, mouse_pressed): self.action = "REPLAY"
+            elif self.btn_next.is_clicked(mouse_pos, mouse_pressed): self.action = "NEXT"
+            elif self.btn_menu.is_clicked(mouse_pos, mouse_pressed): self.action = "MENU"
+        return None
 
     def draw(self, screen):
-        # Kích thước khung mới: Rộng 500, Cao 400 (bọc dư sức 3 nút)
-        popup_width = 540
-        popup_height = 400  
-        popup_x = WINDOW_WIDTH // 2 - popup_width // 2
-        popup_y = 130 # Kéo khung dịch lên trên một chút
+        overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        screen.blit(overlay, (0, 0))
         
-        # 1. Vẽ nền xám đen cho khung (bo góc 20)
-        pygame.draw.rect(screen, (40, 45, 50), (popup_x, popup_y, popup_width, popup_height), border_radius=20)
+        box_w, box_h = 560, 260
+        box_x, box_y = (WINDOW_WIDTH - box_w)//2, (WINDOW_HEIGHT - box_h)//2
+        pygame.draw.rect(screen, (40, 45, 50), (box_x, box_y, box_w, box_h), border_radius=15)
+        pygame.draw.rect(screen, (46, 204, 113), (box_x, box_y, box_w, box_h), 4, border_radius=15)
         
-        # 2. Vẽ viền vàng hoàng kim (dày 5px, bo góc 20)
-        pygame.draw.rect(screen, (255, 215, 0), (popup_x, popup_y, popup_width, popup_height), 5, border_radius=20)
+        font_title = pygame.font.SysFont('tahoma', 45, bold=True)
+        txt_title = font_title.render("HOÀN THÀNH MÀN CHƠI!", True, (46, 204, 113))
+        screen.blit(txt_title, txt_title.get_rect(center=(WINDOW_WIDTH//2, box_y + 50)))
         
-        # 3. Vẽ chữ Tiêu đề (căn ra giữa, nhích xuống một xíu so với mép trên của khung)
-        text_surf = self.font.render("HỆ THỐNG ĐÃ KẾT NỐI!", True, (255, 215, 0))
-        screen.blit(text_surf, text_surf.get_rect(center=(WINDOW_WIDTH//2, 190)))
+        font_reward = pygame.font.SysFont('tahoma', 32, bold=True)
+        # Đã đổi thành COIN
+        txt_reward = font_reward.render(f"PHẦN THƯỞNG: +{self.earned_coins} COIN", True, (255, 215, 0))
+        screen.blit(txt_reward, txt_reward.get_rect(center=(WINDOW_WIDTH//2, box_y + 115)))
         
-        # 4. Vẽ 3 cái nút của Sếp
-        self.btn_next.draw(screen)
         self.btn_replay.draw(screen)
+        self.btn_next.draw(screen)
         self.btn_menu.draw(screen)
 
 class SkinScreen:
