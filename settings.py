@@ -20,6 +20,14 @@ BG_START_PATH = "assets/images/game_bg.png"
 BG_GAME_PATH = "assets/images/game_bg.png"
 IMG_MONEY_PATH = "assets/money_chip.png"
 
+BG_ACT1_PATH = "assets/images/bg_act1.jpg"
+BG_ACT2_PATH = "assets/images/bg_act2.jpg"
+
+ACT_BG_PATHS = [
+    BG_ACT1_PATH,
+    BG_ACT2_PATH
+]
+
 # Các trạng thái luồng game
 STATE_MENU_NAME = 0
 STATE_DASHBOARD = 1

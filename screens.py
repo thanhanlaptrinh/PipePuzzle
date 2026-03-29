@@ -1,166 +1,179 @@
-# screens.py (Đã sửa lỗi font Tiếng Việt Unicode)
 import pygame
-# Import thêm settings để lấy FONT_PATH
 from settings import *
 
 class Button:
-    def __init__(self, x, y, width, height, text, color, text_color):
-        self.rect = pygame.Rect(x, y, width, height)
+    # --- ĐÃ SỬA TÊN BIẾN THÀNH disable_hover_effect ĐỂ TẮT TOÀN BỘ HIỆU ỨNG ---
+    def __init__(self, x, y, w, h, text, bg_color, text_color=(255, 255, 255), disable_hover_effect=False):
+        self.rect = pygame.Rect(x, y, w, h)
         self.text = text
-        self.color = color
+        self.bg_color = bg_color
         self.text_color = text_color
-        
-        # Hạ cỡ chữ của tất cả các nút xuống 30 cho thanh lịch
-        self.font = pygame.font.SysFont('tahoma', 30, bold=True)
         self.is_hovered = False
-
-    def draw(self, screen):
-        draw_color = (min(self.color[0]+30, 255), min(self.color[1]+30, 255), min(self.color[2]+30, 255)) if self.is_hovered else self.color
-        pygame.draw.rect(screen, draw_color, self.rect, border_radius=12)
-        text_surf = self.font.render(self.text, True, self.text_color)
-        text_rect = text_surf.get_rect(center=self.rect.center)
-        screen.blit(text_surf, text_rect)
+        self.is_enabled = True
+        self.disable_hover_effect = disable_hover_effect 
+        self.font = pygame.font.SysFont('tahoma', 28, bold=True) 
 
     def check_hover(self, mouse_pos):
-        self.is_hovered = self.rect.collidepoint(mouse_pos)
+        if self.is_enabled:
+            self.is_hovered = self.rect.collidepoint(mouse_pos)
+        else:
+            self.is_hovered = False
 
     def is_clicked(self, mouse_pos, mouse_pressed):
-        return self.is_hovered and mouse_pressed[0]
+        return self.is_enabled and self.rect.collidepoint(mouse_pos) and mouse_pressed[0]
 
-class StartScreen:  
+    def draw(self, screen):
+        # --- LÔ GIC KIỂM TRA HIỆU ỨNG CHUẨN XÁC HƠN ---
+        if not self.is_enabled:
+            current_bg = (100, 100, 100)
+            current_text = (150, 150, 150)
+            border_color = (100, 100, 100)
+            border_width = 2
+        elif self.is_hovered and self.bg_color != (0, 0, 0, 0) and not self.disable_hover_effect:
+            # Nếu đang Hover và KHÔNG BỊ CẤM hiệu ứng -> Sáng lên
+            current_bg = (min(255, self.bg_color[0] + 30), min(255, self.bg_color[1] + 30), min(255, self.bg_color[2] + 30))
+            current_text = (255, 215, 0) 
+            border_color = (0, 255, 255) 
+            border_width = 3
+        else:
+            # Bình thường hoặc BỊ CẤM hiệu ứng -> Giữ nguyên màu gốc
+            current_bg = self.bg_color
+            current_text = self.text_color
+            border_color = (200, 200, 200) 
+            border_width = 2
+
+        if current_bg != (0, 0, 0, 0):
+            pygame.draw.rect(screen, current_bg, self.rect, border_radius=10)
+            pygame.draw.rect(screen, border_color, self.rect, width=border_width, border_radius=10)
+
+        self.draw_text_outline(screen, self.text, self.font, current_text, (0, 0, 0), self.rect.center)
+
+    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
+        outline_width = 2 
+        for dx in [-outline_width, 0, outline_width]:
+            for dy in [-outline_width, 0, outline_width]:
+                if dx != 0 or dy != 0:
+                    txt_surface = font.render(text, True, outline_color)
+                    screen.blit(txt_surface, txt_surface.get_rect(center=(center_pos[0]+dx, center_pos[1]+dy)))
+        
+        txt_surface = font.render(text, True, text_color)
+        screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
+
+
+class StartScreen:
     def __init__(self):
+        self.font_title = pygame.font.SysFont('tahoma', 70, bold=True)
+        self.font_prompt = pygame.font.SysFont('tahoma', 32, bold=True) 
+        self.font_input = pygame.font.SysFont('tahoma', 40, bold=True) 
+        self.font_error = pygame.font.SysFont('tahoma', 22, bold=True) 
+
         self.player_name = ""
-        # Tăng cỡ chữ và in đậm cho rõ nét
-        self.font_title = pygame.font.SysFont('tahoma', 75, bold=True)
-        self.font_sub = pygame.font.SysFont('tahoma', 32, bold=True)
-        
-        self.background = None
-        try:
-            raw_bg = pygame.image.load(BG_START_PATH).convert()
-            self.background = pygame.transform.smoothscale(raw_bg, (WINDOW_WIDTH, WINDOW_HEIGHT))
-        except pygame.error as e:
-            print(f"Warning: Không thể tải hình nền {BG_START_PATH}. Lỗi: {e}")
+        self.next_state = None
+        self.error_msg = ""
 
-        # Căn chỉnh lại tọa độ ô nhập tên cho nằm ngay chính giữa tỷ lệ vàng
-        center_x = WINDOW_WIDTH // 2
-        center_y = WINDOW_HEIGHT // 2
-        self.input_rect = pygame.Rect(center_x - 175, center_y - 20, 350, 60) # Mở rộng ô một chút
-        
+        box_w, box_h = 450, 70
+        self.input_rect = pygame.Rect((WINDOW_WIDTH - box_w) // 2, (WINDOW_HEIGHT - box_h) // 2 + 40, box_w, box_h)
+        self.btn_start = Button((WINDOW_WIDTH - 200) // 2, self.input_rect.bottom + 50, 200, 60, "BẮT ĐẦU", (46, 204, 113))
+
         self.cursor_visible = True
-        self.cursor_timer = 0
-        self.next_state = STATE_MENU_NAME 
+        self.last_blink = pygame.time.get_ticks()
 
-        self.btn_giftcode = Button(20, WINDOW_HEIGHT - 70, 150, 50, "GIFTCODE", (155, 89, 182), (255, 255, 255))
-        self.show_giftcode_popup = False
-        self.giftcode_input = ""
-
-    # --- HÀM VẼ CHỮ CÓ ĐỔ BÓNG ĐỂ NỔI BẬT TRÊN MỌI NỀN ---
-    def draw_shadow_text(self, screen, text, font, color, center_pos):
-        # 1. Vẽ bóng đen đằng sau (lệch 3 pixel)
-        shadow = font.render(text, True, (0, 0, 0))
-        screen.blit(shadow, shadow.get_rect(center=(center_pos[0] + 3, center_pos[1] + 3)))
-        # 2. Vẽ chữ màu thật đè lên trên
-        main_text = font.render(text, True, color)
-        screen.blit(main_text, main_text.get_rect(center=center_pos))
+    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
+        outline_width = 3 
+        for dx in [-outline_width, 0, outline_width]:
+            for dy in [-outline_width, 0, outline_width]:
+                if dx != 0 or dy != 0:
+                    txt_surface = font.render(text, True, outline_color)
+                    screen.blit(txt_surface, txt_surface.get_rect(center=(center_pos[0]+dx, center_pos[1]+dy)))
+        txt_surface = font.render(text, True, text_color)
+        screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
 
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
-        mouse_pressed = pygame.mouse.get_pressed()
+        self.btn_start.check_hover(mouse_pos)
 
-        # ---> ĐOẠN XỬ LÝ KHUNG NHẬP GIFTCODE <---
-        if self.show_giftcode_popup:
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN:
-                    if self.giftcode_input.upper() == "HACKERPRO":
-                        return "UNLOCK_ALL" # Gửi tín hiệu hack thành công
-                    self.show_giftcode_popup = False
-                    self.giftcode_input = ""
-                elif event.key == pygame.K_BACKSPACE:
-                    self.giftcode_input = self.giftcode_input[:-1]
-                elif event.key == pygame.K_ESCAPE:
-                    self.show_giftcode_popup = False
-                else:
-                    if len(self.giftcode_input) < 15:
-                        self.giftcode_input += event.unicode
-            return None # Nếu đang mở popup thì chặn các sự kiện click khác
-
-        # Kiểm tra click nút Giftcode
-        self.btn_giftcode.check_hover(mouse_pos)
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if self.btn_giftcode.is_clicked(mouse_pos, mouse_pressed):
-                self.show_giftcode_popup = True
-                self.giftcode_input = ""
-                return None
+            if self.btn_start.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
+                if len(self.player_name.strip()) > 0: self.next_state = STATE_DASHBOARD
+                else: self.error_msg = "Vui lòng nhập tên của bạn!"
 
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_BACKSPACE:
+            if event.key == pygame.K_RETURN:
+                if len(self.player_name.strip()) > 0: self.next_state = STATE_DASHBOARD
+                else: self.error_msg = "Vui lòng nhập tên của bạn!"
+            elif event.key == pygame.K_BACKSPACE:
                 self.player_name = self.player_name[:-1]
-            elif event.key == pygame.K_RETURN:
-                if len(self.player_name) > 0:
-                    self.next_state = STATE_DASHBOARD
+                self.error_msg = "" 
             else:
-                if event.unicode.isalpha() or event.unicode.isdigit():
-                    if len(self.player_name) < 12:
-                        self.player_name += event.unicode
+                if len(self.player_name) < 12: 
+                    self.player_name += event.unicode
+                    self.error_msg = "" 
+        return None
 
     def draw(self, screen):
-        if self.background:
-            screen.blit(self.background, (0, 0))
-        else:
-            screen.fill(BG_COLOR)
-            
-        center_x = WINDOW_WIDTH // 2
-        center_y = WINDOW_HEIGHT // 2
+        screen.fill((0, 0, 0))
+        self.draw_text_outline(screen, "PIPE PUZZLE", self.font_title, (0, 255, 255), (0, 0, 0), (WINDOW_WIDTH // 2, 120))
+        
+        prompt_y = self.input_rect.top - 60
+        self.draw_text_outline(screen, "Nhập tên của bạn:", self.font_prompt, (255, 255, 255), (0, 0, 0), (WINDOW_WIDTH // 2, prompt_y))
 
-        # 1. Vẽ Tiêu đề có bóng đen
-        self.draw_shadow_text(screen, "PIPE PUZZLE", self.font_title, PIPE_COLOR_ON, (center_x, center_y - 130))
-        
-        # 2. Vẽ Hướng dẫn có bóng đen
-        self.draw_shadow_text(screen, "Nhập tên của bạn:", self.font_sub, TEXT_COLOR, (center_x, center_y - 65))
-        
-        # 3. Vẽ ô nhập tên (Thêm viền Neon)
-        pygame.draw.rect(screen, INPUT_BOX_COLOR, self.input_rect, 0, 15) # Nền xám, bo góc
-        pygame.draw.rect(screen, PIPE_COLOR_ON, self.input_rect, 3, 15)   # Viền Neon xanh rực
-        
-        # 4. Vẽ tên người chơi
-        if len(self.player_name) > 0:
-            name_surf = self.font_sub.render(self.player_name, True, TEXT_COLOR)
-            name_rect = name_surf.get_rect(center=self.input_rect.center)
-            screen.blit(name_surf, name_rect)
-        else:
-            name_rect = pygame.Rect(self.input_rect.centerx, self.input_rect.centery, 0, 0)
-            
-        # 5. Con trỏ nhấp nháy
-        self.cursor_timer += 1
-        if self.cursor_timer >= 30:
+        pygame.draw.rect(screen, (25, 25, 25), self.input_rect, border_radius=12)
+        pygame.draw.rect(screen, (0, 255, 255), self.input_rect, width=3, border_radius=12)
+
+        txt_surface = self.font_input.render(self.player_name, True, (255, 255, 255))
+        txt_rect = txt_surface.get_rect(center=self.input_rect.center)
+        screen.blit(txt_surface, txt_rect)
+
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_blink > 500:
             self.cursor_visible = not self.cursor_visible
-            self.cursor_timer = 0
-            
+            self.last_blink = current_time
+
         if self.cursor_visible:
-            cursor_x = name_rect.right + 5 if len(self.player_name) > 0 else self.input_rect.centerx
-            pygame.draw.line(screen, TEXT_COLOR, (cursor_x, self.input_rect.centery - 18), (cursor_x, self.input_rect.centery + 18), 3)
-            
-        # 6. Chữ Hint khi đã nhập tên
-        if len(self.player_name) > 0:
-            self.draw_shadow_text(screen, "Nhấn ENTER để bắt đầu", self.font_sub, HIGHLIGHT_COLOR, (center_x, center_y + 80))
+            cursor_x = txt_rect.right + 5 if len(self.player_name) > 0 else self.input_rect.centerx
+            cursor_y_start = self.input_rect.centery - 20
+            cursor_y_end = self.input_rect.centery + 20
+            pygame.draw.line(screen, (0, 255, 255), (cursor_x, cursor_y_start), (cursor_x, cursor_y_end), 4)
+
+        self.btn_start.draw(screen)
+        if self.error_msg:
+            self.draw_text_outline(screen, self.error_msg, self.font_error, (231, 76, 60), (0, 0, 0), (WINDOW_WIDTH // 2, self.btn_start.rect.bottom + 40))
+
 
 class DashboardScreen:
     def __init__(self):
-        self.font_title = pygame.font.SysFont('tahoma', 60, bold=True)
-        self.font_btn = pygame.font.SysFont('tahoma', 32, bold=True)
+        self.font_title = pygame.font.SysFont('tahoma', 70, bold=True)
+        self.font_btn = pygame.font.SysFont('tahoma', 36, bold=True) 
+        self.font_small = pygame.font.SysFont('tahoma', 22, bold=True)
         self.next_state = None
         
-        self.btn_play = Button(WINDOW_WIDTH//2 - 150, 250, 300, 60, "CHỌN MÀN CHƠI", (0, 200, 200), (0, 0, 0))
-        self.btn_shop = Button(WINDOW_WIDTH//2 - 150, 340, 300, 60, "CỬA HÀNG", (52, 152, 219), (255, 255, 255))
-        self.btn_quests = Button(WINDOW_WIDTH//2 - 150, 430, 300, 60, "NHIỆM VỤ", (155, 89, 182), (255, 255, 255))
-        self.btn_skin = Button(WINDOW_WIDTH - 150, WINDOW_HEIGHT - 80, 120, 50, "SKIN", (241, 196, 15), (0, 0, 0))
+        self.btn_play = Button(WINDOW_WIDTH//2 - 150, 250, 300, 60, "CHỌN MÀN CHƠI", (46, 204, 113))
+        self.btn_shop = Button(WINDOW_WIDTH//2 - 150, 340, 300, 60, "CỬA HÀNG", (52, 152, 219))
+        self.btn_quests = Button(WINDOW_WIDTH//2 - 150, 430, 300, 60, "NHIỆM VỤ", (155, 89, 182))
+        self.btn_skin = Button(WINDOW_WIDTH - 150, WINDOW_HEIGHT - 80, 120, 50, "SKIN", (241, 196, 15))
+        self.btn_options = Button(30, WINDOW_HEIGHT - 80, 160, 50, "OPTIONS", (100, 100, 100))
         
-        self.btn_giftcode = Button(30, WINDOW_HEIGHT - 80, 160, 50, "GIFTCODE", (155, 89, 182), (255, 255, 255))
+        self.show_options_popup = False
         self.show_giftcode_popup = False
         self.giftcode_input = ""
-        
-        # Đã xóa phần load ảnh rườm rà
         self.notifications = [] 
+
+        box_w, box_h = 600, 450
+        box_x, box_y = (WINDOW_WIDTH - box_w)//2, (WINDOW_HEIGHT - box_h)//2
+        self.btn_opt_exit = Button(box_x + 40, box_y + 350, 150, 50, "THOÁT", (231, 76, 60))
+        self.btn_opt_rename = Button(box_x + 225, box_y + 350, 150, 50, "ĐỔI TÊN", (52, 152, 219))
+        
+        # --- ĐÃ ĐỔI MÀU CHỮ THÀNH TRẮNG VÀ CẤM HOÀN TOÀN HOVER ---
+        self.btn_opt_giftcode = Button(box_x + 410, box_y + 350, 150, 50, "GIFTCODE", (241, 196, 15), (255, 255, 255), disable_hover_effect=True)
+        
+        self.btn_opt_close = Button(box_x + box_w - 50, box_y + 10, 40, 40, "X", (231, 76, 60))
+
+        self.music_vol = 1.0
+        self.sfx_vol = 1.0
+        self.rect_music_slider = pygame.Rect(box_x + 220, box_y + 155, 300, 25)
+        self.rect_sfx_slider = pygame.Rect(box_x + 220, box_y + 255, 300, 25)
+        self.is_dragging_music = False
+        self.is_dragging_sfx = False
 
     def handle_event(self, event, redeemed_codes):
         mouse_pos = pygame.mouse.get_pos()
@@ -170,211 +183,262 @@ class DashboardScreen:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     code = self.giftcode_input.upper()
-                    
                     if code in redeemed_codes:
                         self.notifications.append({'text': "MÃ NÀY ĐÃ SỬ DỤNG!", 'x': WINDOW_WIDTH//2, 'y': WINDOW_HEIGHT//2, 'alpha': 255, 'color': (231, 76, 60)})
                         self.show_giftcode_popup = False
+                        self.show_options_popup = True 
                         self.giftcode_input = ""
                         return None
-                        
                     elif code == "UNPIPE":
                         self.notifications.append({'text': "ĐÃ MỞ KHÓA MAX LEVEL!", 'x': WINDOW_WIDTH//2, 'y': WINDOW_HEIGHT//2, 'alpha': 255, 'color': (46, 204, 113)})
                         self.show_giftcode_popup = False
+                        self.show_options_popup = True
                         self.giftcode_input = ""
                         return "UNLOCK_ALL"
-                        
                     elif code == "PIPEGOLD":
-                        # Trở về với chữ COIN thân thương
                         self.notifications.append({'text': "+10.000 COIN", 'x': WINDOW_WIDTH//2, 'y': WINDOW_HEIGHT//2, 'alpha': 255, 'color': (255, 215, 0)})
                         self.show_giftcode_popup = False
+                        self.show_options_popup = True
                         self.giftcode_input = ""
                         return "ADD_COINS"
-                        
                     else:
                         self.notifications.append({'text': "MÃ KHÔNG HỢP LỆ!", 'x': WINDOW_WIDTH//2, 'y': WINDOW_HEIGHT//2, 'alpha': 255, 'color': (231, 76, 60)})
                         self.show_giftcode_popup = False
+                        self.show_options_popup = True
                         self.giftcode_input = ""
                         return None
-                        
-                elif event.key == pygame.K_BACKSPACE:
-                    self.giftcode_input = self.giftcode_input[:-1]
+                elif event.key == pygame.K_BACKSPACE: self.giftcode_input = self.giftcode_input[:-1]
                 elif event.key == pygame.K_ESCAPE:
                     self.show_giftcode_popup = False
+                    self.show_options_popup = True 
                 else:
-                    if len(self.giftcode_input) < 15:
-                        self.giftcode_input += event.unicode
+                    if len(self.giftcode_input) < 15: self.giftcode_input += event.unicode
+            return None
+
+        if self.show_options_popup:
+            self.btn_opt_exit.check_hover(mouse_pos)
+            self.btn_opt_rename.check_hover(mouse_pos)
+            self.btn_opt_giftcode.check_hover(mouse_pos)
+            self.btn_opt_close.check_hover(mouse_pos)
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if self.btn_opt_close.is_clicked(mouse_pos, mouse_pressed): self.show_options_popup = False
+                elif self.btn_opt_exit.is_clicked(mouse_pos, mouse_pressed):
+                    import sys; pygame.quit(); sys.exit()
+                elif self.btn_opt_rename.is_clicked(mouse_pos, mouse_pressed):
+                    self.next_state = STATE_MENU_NAME 
+                    self.show_options_popup = False
+                elif self.btn_opt_giftcode.is_clicked(mouse_pos, mouse_pressed):
+                    self.show_options_popup = False
+                    self.show_giftcode_popup = True
+                    self.giftcode_input = ""
+                
+                if mouse_pressed[0]:
+                    if self.rect_music_slider.collidepoint(mouse_pos): self.is_dragging_music = True
+                    if self.rect_sfx_slider.collidepoint(mouse_pos): self.is_dragging_sfx = True
+
+            elif event.type == pygame.MOUSEBUTTONUP:
+                self.is_dragging_music = False
+                self.is_dragging_sfx = False
+
+            if self.is_dragging_music or (mouse_pressed[0] and self.rect_music_slider.collidepoint(mouse_pos)):
+                rel_x = mouse_pos[0] - self.rect_music_slider.x
+                self.music_vol = max(0.0, min(1.0, rel_x / self.rect_music_slider.width)) 
+                
+            if self.is_dragging_sfx or (mouse_pressed[0] and self.rect_sfx_slider.collidepoint(mouse_pos)):
+                rel_x = mouse_pos[0] - self.rect_sfx_slider.x
+                self.sfx_vol = max(0.0, min(1.0, rel_x / self.rect_sfx_slider.width))
             return None
 
         self.btn_play.check_hover(mouse_pos)
         self.btn_shop.check_hover(mouse_pos)
         self.btn_quests.check_hover(mouse_pos)
         self.btn_skin.check_hover(mouse_pos)
-        self.btn_giftcode.check_hover(mouse_pos)
+        self.btn_options.check_hover(mouse_pos)
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.btn_play.is_clicked(mouse_pos, mouse_pressed): self.next_state = STATE_LEVEL_SELECT
             elif self.btn_shop.is_clicked(mouse_pos, mouse_pressed): self.next_state = STATE_SHOP
             elif self.btn_quests.is_clicked(mouse_pos, mouse_pressed): self.next_state = STATE_QUESTS
             elif self.btn_skin.is_clicked(mouse_pos, mouse_pressed): self.next_state = STATE_SKIN
-            elif self.btn_giftcode.is_clicked(mouse_pos, mouse_pressed):
-                self.show_giftcode_popup = True
-                self.giftcode_input = ""
+            elif self.btn_options.is_clicked(mouse_pos, mouse_pressed): self.show_options_popup = True
         return None
+
+    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
+        outline_width = 3
+        for dx in [-outline_width, 0, outline_width]:
+            for dy in [-outline_width, 0, outline_width]:
+                if dx != 0 or dy != 0:
+                    txt_surface = font.render(text, True, outline_color)
+                    screen.blit(txt_surface, txt_surface.get_rect(center=(center_pos[0]+dx, center_pos[1]+dy)))
+        txt_surface = font.render(text, True, text_color)
+        screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
 
     def draw(self, screen, player_name, coins):
         screen.fill((30, 30, 30)) 
         
-        pygame.draw.rect(screen, (50, 50, 50), (0, 0, WINDOW_WIDTH, 80))
-        font_info = pygame.font.SysFont('tahoma', 32, bold=True)
-        name_text = font_info.render(f"PLAYER: {player_name}", True, (255, 255, 255))
-        screen.blit(name_text, (30, 20))
-        
-        # Vẽ chữ COIN gọn gàng ở góc phải
-        coins_text = font_info.render(f"COIN: {coins}", True, (255, 215, 0))
-        screen.blit(coins_text, (WINDOW_WIDTH - 250, 20))
-
-        title = self.font_title.render("PIPE PUZZLE", True, (0, 255, 255))
-        screen.blit(title, title.get_rect(center=(WINDOW_WIDTH//2, 150)))
+        font_info = pygame.font.SysFont("tahoma", 32, bold=True)
+        self.draw_text_outline(screen, f"PLAYER: {player_name}", font_info, (255, 255, 255), (0,0,0), (220, 40))
+        self.draw_text_outline(screen, f"COIN: {coins}", font_info, (255, 215, 0), (0,0,0), (WINDOW_WIDTH - 220, 40))
+        self.draw_text_outline(screen, "PIPE PUZZLE", self.font_title, (0, 255, 255), (0, 0, 0), (WINDOW_WIDTH//2, 120))
 
         self.btn_play.draw(screen)
         self.btn_shop.draw(screen)
         self.btn_quests.draw(screen)
         self.btn_skin.draw(screen)
-        self.btn_giftcode.draw(screen)
+        self.btn_options.draw(screen)
 
-        # Popup nhập mã
-        if self.show_giftcode_popup:
+        if self.show_options_popup:
             overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 180))
+            overlay.fill((0, 0, 0, 200))
             screen.blit(overlay, (0, 0))
             
-            box_w, box_h = 400, 200
+            box_w, box_h = 600, 450
             box_x, box_y = (WINDOW_WIDTH - box_w)//2, (WINDOW_HEIGHT - box_h)//2
             pygame.draw.rect(screen, (40, 45, 50), (box_x, box_y, box_w, box_h), border_radius=15)
-            pygame.draw.rect(screen, (155, 89, 182), (box_x, box_y, box_w, box_h), 4, border_radius=15)
+            pygame.draw.rect(screen, (0, 255, 255), (box_x, box_y, box_w, box_h), 4, border_radius=15)
             
-            font_chapter = pygame.font.SysFont('tahoma', 36, bold=True)
-            txt_title = font_chapter.render("NHẬP MÃ BÍ MẬT:", True, (255, 255, 255))
-            screen.blit(txt_title, txt_title.get_rect(center=(WINDOW_WIDTH//2, box_y + 40)))
+            # --- ĐÃ ĐỔI TÊN THÀNH OPTIONS ---
+            self.draw_text_outline(screen, "OPTIONS", self.font_title, (0, 255, 255), (0,0,0), (WINDOW_WIDTH//2, box_y + 70))
             
-            pygame.draw.rect(screen, (20, 20, 20), (box_x + 20, box_y + 80, box_w - 40, 50))
-            txt_input = font_chapter.render(self.giftcode_input + "_", True, (255, 215, 0))
-            screen.blit(txt_input, (box_x + 30, box_y + 85))
-            
-            font_btn = pygame.font.SysFont('tahoma', 24, bold=True)
-            txt_hint = font_btn.render("Ấn ENTER để xác nhận", True, (150, 150, 150))
-            screen.blit(txt_hint, txt_hint.get_rect(center=(WINDOW_WIDTH//2, box_y + 160)))
+            self.draw_text_outline(screen, "NHẠC NỀN", self.font_small, (255, 255, 255), (0,0,0), (box_x + 120, box_y + 165))
+            pygame.draw.rect(screen, (20, 20, 20), self.rect_music_slider, border_radius=10)
+            fill_music_w = int(self.rect_music_slider.width * self.music_vol)
+            if fill_music_w > 0:
+                pygame.draw.rect(screen, (46, 204, 113), pygame.Rect(self.rect_music_slider.x, self.rect_music_slider.y, fill_music_w, self.rect_music_slider.height), border_radius=10)
+            pygame.draw.rect(screen, (255, 255, 255), self.rect_music_slider, 3, border_radius=10)
+            circle_x = self.rect_music_slider.x + fill_music_w
+            circle_y = self.rect_music_slider.centery
+            pygame.draw.circle(screen, (255, 255, 255), (circle_x, circle_y), 15)
+            pygame.draw.circle(screen, (0, 0, 0), (circle_x, circle_y), 15, 3) 
 
-        # Thông báo bay lên
-        font_notif = pygame.font.SysFont('tahoma', 45, bold=True)
+            self.draw_text_outline(screen, "HIỆU ỨNG", self.font_small, (255, 255, 255), (0,0,0), (box_x + 120, box_y + 265))
+            pygame.draw.rect(screen, (20, 20, 20), self.rect_sfx_slider, border_radius=10)
+            fill_sfx_w = int(self.rect_sfx_slider.width * self.sfx_vol)
+            if fill_sfx_w > 0:
+                pygame.draw.rect(screen, (46, 204, 113), pygame.Rect(self.rect_sfx_slider.x, self.rect_sfx_slider.y, fill_sfx_w, self.rect_sfx_slider.height), border_radius=10)
+            pygame.draw.rect(screen, (255, 255, 255), self.rect_sfx_slider, 3, border_radius=10)
+            circle_x = self.rect_sfx_slider.x + fill_sfx_w
+            circle_y = self.rect_sfx_slider.centery
+            pygame.draw.circle(screen, (255, 255, 255), (circle_x, circle_y), 15)
+            pygame.draw.circle(screen, (0, 0, 0), (circle_x, circle_y), 15, 3)
+
+            self.btn_opt_exit.draw(screen)
+            self.btn_opt_rename.draw(screen)
+            self.btn_opt_giftcode.draw(screen)
+            self.btn_opt_close.draw(screen)
+
+        elif self.show_giftcode_popup:
+            overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 200))
+            screen.blit(overlay, (0, 0))
+            box_w, box_h = 500, 250
+            box_x, box_y = (WINDOW_WIDTH - box_w)//2, (WINDOW_HEIGHT - box_h)//2
+            pygame.draw.rect(screen, (40, 45, 50), (box_x, box_y, box_w, box_h), border_radius=15)
+            pygame.draw.rect(screen, (255, 215, 0), (box_x, box_y, box_w, box_h), 4, border_radius=15)
+            
+            self.draw_text_outline(screen, "NHẬP MÃ BÍ MẬT:", self.font_btn, (255, 255, 255), (0,0,0), (WINDOW_WIDTH//2, box_y + 50))
+            pygame.draw.rect(screen, (20, 20, 20), (box_x + 20, box_y + 100, box_w - 40, 60), border_radius=10)
+            pygame.draw.rect(screen, (0, 255, 255), (box_x + 20, box_y + 100, box_w - 40, 60), 3, border_radius=10)
+            
+            txt_input = self.font_btn.render(self.giftcode_input + "_", True, (255, 215, 0))
+            screen.blit(txt_input, (box_x + 40, box_y + 110))
+            self.draw_text_outline(screen, "ENTER xác nhận - ESC để Hủy", self.font_small, (150, 150, 150), (0,0,0), (WINDOW_WIDTH//2, box_y + 200))
+
+        font_notif = pygame.font.SysFont("tahoma", 45, bold=True)
         for notif in self.notifications[:]: 
-            txt_surface = font_notif.render(notif['text'], True, notif['color'])
-            txt_surface.set_alpha(notif['alpha']) 
-            
-            rect = txt_surface.get_rect(center=(notif['x'], notif['y']))
-            screen.blit(txt_surface, rect)
-            
+            self.draw_text_outline(screen, notif['text'], font_notif, notif['color'], (0,0,0), (notif['x'], notif['y']))
             notif['y'] -= 2       
             notif['alpha'] -= 4   
-            
-            if notif['alpha'] <= 0:
-                self.notifications.remove(notif)
+            if notif['alpha'] <= 0: self.notifications.remove(notif)
 
 
 class LevelSelectScreen:
     def __init__(self):
-        self.font_title = pygame.font.SysFont('tahoma', 50, bold=True)
-        self.font_chapter = pygame.font.SysFont('tahoma', 36, bold=True)
-        self.font_btn = pygame.font.SysFont('tahoma', 24, bold=True)
+        self.font_title = pygame.font.SysFont('tahoma', 60, bold=True)
+        self.font_act = pygame.font.SysFont('tahoma', 36, bold=True) 
         self.next_state = None
-        self.selected_level = 1
-        
-        self.current_chapter = 1 # Trang Act hiện tại
-        self.max_chapters = 5    # Tổng số trang (5 Act)
-        
-        self.btn_menu = Button(20, 20, 150, 50, "<- MENU", (149, 165, 166), (255, 255, 255))
-        
-        # ĐÃ XÓA SẠCH BIẾN NÚT GIFTCODE Ở ĐÂY
-        
-        # Nút chuyển trang (Act)
-        self.btn_prev_chap = Button(WINDOW_WIDTH // 2 - 250, 110, 50, 50, "<", (52, 152, 219), (255, 255, 255))
-        self.btn_next_chap = Button(WINDOW_WIDTH // 2 + 200, 110, 50, 50, ">", (52, 152, 219), (255, 255, 255))
+        self.selected_level = None
+        self.selected_act = 1 
 
-    def get_chapter_name(self):
-        return f"ACT {self.current_chapter}"
+        self.btn_back = Button(20, 20, 120, 50, "MENU", (0, 0, 0, 0), (255, 255, 255))
+        
+        grid_w, grid_h = 420, 290
+        start_x, start_y = (WINDOW_WIDTH - grid_w) // 2, 200
+        mid_y = start_y + grid_h // 2
+        
+        self.btn_act_prev = Button(start_x - 100, mid_y - 40, 80, 80, "<", (0, 0, 0, 0), (255, 255, 255))
+        self.btn_next = Button(start_x + grid_w + 20, mid_y - 40, 80, 80, ">", (0, 0, 0, 0), (255, 255, 255))
+        
+        self.level_buttons = []
+        level_btn_size = 90
+        padding = 10
+        
+        for i in range(12):
+            row = i // 4
+            col = i % 4
+            x = start_x + col * (level_btn_size + padding)
+            y = start_y + row * (level_btn_size + padding)
+            self.level_buttons.append(Button(x, y, level_btn_size, level_btn_size, "", (46, 204, 113)))
+
+        self.act_backgrounds = {}
+        for i in range(1, 6): 
+            path = f"assets/images/bg_act{i}.jpg"
+            try:
+                raw_bg = pygame.image.load(path).convert()
+                self.act_backgrounds[i] = pygame.transform.smoothscale(raw_bg, (WINDOW_WIDTH, WINDOW_HEIGHT))
+            except Exception:
+                fallback_bg = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
+                fallback_bg.fill((30, 30, 30))
+                self.act_backgrounds[i] = fallback_bg
 
     def handle_event(self, event, unlocked_levels):
         mouse_pos = pygame.mouse.get_pos()
         mouse_pressed = pygame.mouse.get_pressed()
 
-        # ĐÃ XÓA SẠCH LOGIC GÕ BÀN PHÍM GIFTCODE Ở ĐÂY
+        self.btn_back.check_hover(mouse_pos)
+        self.btn_act_prev.check_hover(mouse_pos)
+        self.btn_next.check_hover(mouse_pos)
 
-        self.btn_menu.check_hover(mouse_pos)
-        self.btn_prev_chap.check_hover(mouse_pos)
-        self.btn_next_chap.check_hover(mouse_pos)
+        for i, btn in enumerate(self.level_buttons):
+            level_num = (self.selected_act - 1) * 12 + i + 1
+            btn.text = str(level_num)
+            btn.is_enabled = level_num <= unlocked_levels
+            btn.check_hover(mouse_pos)
 
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if self.btn_menu.is_clicked(mouse_pos, mouse_pressed):
-                self.next_state = STATE_DASHBOARD
-            
-            # Xử lý nút Lật trang
-            elif self.btn_prev_chap.is_clicked(mouse_pos, mouse_pressed) and self.current_chapter > 1:
-                self.current_chapter -= 1
-            elif self.btn_next_chap.is_clicked(mouse_pos, mouse_pressed) and self.current_chapter < self.max_chapters:
-                self.current_chapter += 1
+            if self.btn_back.is_clicked(mouse_pos, mouse_pressed): self.next_state = STATE_DASHBOARD
+            elif self.btn_act_prev.is_clicked(mouse_pos, mouse_pressed):
+                if self.selected_act > 1: self.selected_act -= 1
+            elif self.btn_next.is_clicked(mouse_pos, mouse_pressed):
+                if self.selected_act < 5: self.selected_act += 1
 
-            # Check click vào 12 nút màn chơi
-            start_x = (WINDOW_WIDTH - (4 * 110)) // 2 + 10 
-            start_y = 200
-            for i in range(12):
-                row = i // 4
-                col = i % 4
-                rect = pygame.Rect(start_x + col * 110, start_y + row * 110, 80, 80)
-                
-                if rect.collidepoint(mouse_pos):
-                    actual_level = (self.current_chapter - 1) * 12 + (i + 1)
-                    if actual_level <= unlocked_levels:
-                        self.selected_level = actual_level
-                        self.next_state = STATE_GAME_PLAY
+            for i, btn in enumerate(self.level_buttons):
+                if btn.is_clicked(mouse_pos, mouse_pressed) and btn.is_enabled:
+                    self.selected_level = (self.selected_act - 1) * 12 + i + 1
+                    self.next_state = STATE_GAME_PLAY
         return None
 
-    def draw(self, screen, unlocked_levels):
-        # Tiêu đề
-        title = self.font_title.render("CHỌN MÀN CHƠI", True, (255, 215, 0))
-        screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 50)))
-        
-        self.btn_menu.draw(screen)
-        
-        # ĐÃ XÓA SẠCH LỆNH VẼ NÚT GIFTCODE Ở ĐÂY
+    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
+        outline_width = 3
+        for dx in [-outline_width, 0, outline_width]:
+            for dy in [-outline_width, 0, outline_width]:
+                if dx != 0 or dy != 0:
+                    txt_surface = font.render(text, True, outline_color)
+                    screen.blit(txt_surface, txt_surface.get_rect(center=(center_pos[0]+dx, center_pos[1]+dy)))
+        txt_surface = font.render(text, True, text_color)
+        screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
 
-        # Vẽ tên Act và nút Lật trang
-        chap_name = self.font_chapter.render(self.get_chapter_name(), True, (200, 255, 255))
-        screen.blit(chap_name, chap_name.get_rect(center=(WINDOW_WIDTH // 2, 135)))
-        
-        if self.current_chapter > 1: self.btn_prev_chap.draw(screen)
-        if self.current_chapter < self.max_chapters: self.btn_next_chap.draw(screen)
+    def draw(self, screen):
+        screen.blit(self.act_backgrounds.get(self.selected_act), (0, 0))
+        self.draw_text_outline(screen, "CHỌN MÀN CHƠI", self.font_title, (0, 255, 255), (0, 0, 0), (WINDOW_WIDTH // 2, 80))
+        self.draw_text_outline(screen, f"ACT {self.selected_act}", self.font_act, (255, 255, 255), (0, 0, 0), (WINDOW_WIDTH // 2, 140))
 
-        # Vẽ lưới 12 ô Level
-        start_x = (WINDOW_WIDTH - (4 * 110)) // 2 + 10
-        start_y = 200
-        for i in range(12):
-            row = i // 4
-            col = i % 4
-            rect = pygame.Rect(start_x + col * 110, start_y + row * 110, 80, 80)
-            
-            actual_level = (self.current_chapter - 1) * 12 + (i + 1)
-            display_num = str(i + 1) 
-            
-            if actual_level <= unlocked_levels:
-                pygame.draw.rect(screen, (46, 204, 113), rect, border_radius=15)
-                pygame.draw.rect(screen, (39, 174, 96), rect, 4, border_radius=15)
-                lvl_text = self.font_title.render(display_num, True, (255, 255, 255))
-            else:
-                pygame.draw.rect(screen, (80, 80, 80), rect, border_radius=15)
-                pygame.draw.rect(screen, (50, 50, 50), rect, 4, border_radius=15)
-                lvl_text = self.font_title.render("X", True, (150, 150, 150))
+        for btn in self.level_buttons: btn.draw(screen)
+        self.btn_back.draw(screen)
+        if self.selected_act > 1: self.btn_act_prev.draw(screen)
+        if self.selected_act < 5: self.btn_next.draw(screen)
 
-            screen.blit(lvl_text, lvl_text.get_rect(center=rect.center))
 
 class PauseMenu:
     def __init__(self):
@@ -383,10 +447,9 @@ class PauseMenu:
         self.overlay.fill((0, 0, 0))
         center_x, center_y = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
         
-        # --- VẼ NÚT TIẾNG VIỆT ---
-        self.btn_restart = Button(center_x - 100, center_y - 100, 200, 50, "CHƠI LẠI", PIPE_COLOR_ON, (0, 0, 0))
-        self.btn_ai = Button(center_x - 100, center_y - 30, 200, 50, "AI GIẢI", (150, 100, 200), (255, 255, 255))
-        self.btn_exit = Button(center_x - 100, center_y + 40, 200, 50, "THOÁT MÀN", (200, 50, 50), (255, 255, 255))
+        self.btn_restart = Button(center_x - 100, center_y - 100, 200, 50, "CHƠI LẠI", (52, 152, 219))
+        self.btn_ai = Button(center_x - 100, center_y - 30, 200, 50, "AI GIẢI", (155, 89, 182))
+        self.btn_exit = Button(center_x - 100, center_y + 40, 200, 50, "THOÁT MÀN", (231, 76, 60))
         self.action = None 
         
     def handle_event(self, event):
@@ -405,81 +468,72 @@ class PauseMenu:
         self.btn_ai.draw(screen)
         self.btn_exit.draw(screen)
 
+
 class TutorialPopup:
     def __init__(self):
         self.overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT))
         self.overlay.set_alpha(200)
         self.overlay.fill((0, 0, 0))
         
-        # Hạ cỡ chữ Tiêu đề xuống 36, chữ nội dung xuống 22
-        self.font_title = pygame.font.SysFont('tahoma', 36, bold=True)
-        self.font_text = pygame.font.SysFont('tahoma', 22)
-        
-        # NỚI RỘNG KHUNG BẢNG: Từ 500 lên 640 pixel để chữ thở
+        self.font_title = pygame.font.SysFont('tahoma', 40, bold=True)
+        self.font_text = pygame.font.SysFont('tahoma', 26, bold=True) 
         self.popup_rect = pygame.Rect(WINDOW_WIDTH//2 - 320, WINDOW_HEIGHT//2 - 200, 640, 400)
-        
-        # Nút bấm căn giữa lại
-        self.btn_understand = Button(WINDOW_WIDTH//2 - 120, WINDOW_HEIGHT//2 + 100, 240, 50, "TÔI ĐÃ HIỂU!", PIPE_COLOR_ON, (0, 0, 0))
+        self.btn_understand = Button(WINDOW_WIDTH//2 - 120, WINDOW_HEIGHT//2 + 100, 240, 50, "ĐÃ HIỂU!", (46, 204, 113))
         self.action = None
 
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
         self.btn_understand.check_hover(mouse_pos)
         if event.type == pygame.MOUSEBUTTONDOWN:
-            if self.btn_understand.is_clicked(mouse_pos, pygame.mouse.get_pressed()): 
-                self.action = "UNDERSTOOD"
+            if self.btn_understand.is_clicked(mouse_pos, pygame.mouse.get_pressed()): self.action = "UNDERSTOOD"
+
+    def draw_text_outline(self, screen, text, font, text_color, outline_color, pos, center=False):
+        outline_width = 2
+        for dx in [-outline_width, 0, outline_width]:
+            for dy in [-outline_width, 0, outline_width]:
+                if dx != 0 or dy != 0:
+                    txt_surface = font.render(text, True, outline_color)
+                    rect = txt_surface.get_rect(center=pos) if center else txt_surface.get_rect(topleft=pos)
+                    screen.blit(txt_surface, rect)
+        txt_surface = font.render(text, True, text_color)
+        rect = txt_surface.get_rect(center=pos) if center else txt_surface.get_rect(topleft=pos)
+        screen.blit(txt_surface, rect)
 
     def draw(self, screen):
         screen.blit(self.overlay, (0, 0))
-        pygame.draw.rect(screen, INPUT_BOX_COLOR, self.popup_rect, border_radius=15)
-        pygame.draw.rect(screen, PIPE_COLOR_ON, self.popup_rect, 2, border_radius=15)
+        pygame.draw.rect(screen, (40, 45, 50), self.popup_rect, border_radius=15)
+        pygame.draw.rect(screen, (46, 204, 113), self.popup_rect, 4, border_radius=15)
         
-        title_surf = self.font_title.render("HƯỚNG DẪN CƠ BẢN", True, PIPE_COLOR_ON)
-        screen.blit(title_surf, title_surf.get_rect(center=(WINDOW_WIDTH//2, self.popup_rect.top + 40)))
-        
+        self.draw_text_outline(screen, "HƯỚNG DẪN CƠ BẢN", self.font_title, (46, 204, 113), (0, 0, 0), (WINDOW_WIDTH//2, self.popup_rect.top + 40), center=True)
         instructions = [
-            "1. Click chuột TRÁI vào ống nước để xoay 90 độ.",
-            "2. Nối thông dòng nước (màu neon) từ góc TRÁI-TRÊN.",
-            "3. Dùng nút 'AI GIẢI' trên MENU nếu bạn bị kẹt.",
-            "MỤC TIÊU: Dẫn nước chạm tới góc PHẢI-DƯỚI!"
+            "1. Click chuột TRÁI để xoay ống.",
+            "2. Nối thông dòng nước từ góc TRÁI-TRÊN.",
+            "3. Click 'AI GIẢI' trên MENU nếu bị kẹt.",
+            "MỤC TIÊU: Nước chảy đến PHẢI-DƯỚI!"
         ]
         
-        # Thụt lề vào 40px cho đẹp
         for i, text in enumerate(instructions):
-            color = HIGHLIGHT_COLOR if i == 3 else TEXT_COLOR
-            text_surf = self.font_text.render(text, True, color)
-            screen.blit(text_surf, (self.popup_rect.left + 40, self.popup_rect.top + 110 + i*45))
-            
+            color = (255, 215, 0) if i == 3 else (255, 255, 255)
+            self.draw_text_outline(screen, text, self.font_text, color, (0, 0, 0), (self.popup_rect.left + 40, self.popup_rect.top + 110 + i*45))
         self.btn_understand.draw(screen)
 
-# Placeholder cho Shop và Quests (Team se code sau)
-class ShopScreen:
-    def __init__(self):
-        self.next_state = None
-        self.font = pygame.font.SysFont('tahoma', 40)
-    def handle_event(self, e): pass
-    def draw(self, s): s.fill(BG_COLOR); s.blit(self.font.render("CỬA HÀNG (Team se code sau)", True, TEXT_COLOR), (200, 300))
-
-class QuestsScreen:
-    def __init__(self):
-        self.next_state = None
-        self.font = pygame.font.SysFont('tahoma', 40)
-    def handle_event(self, e): pass
-    def draw(self, s): s.fill(BG_COLOR); s.blit(self.font.render("NHIỆM VỤ (Team se code sau)", True, TEXT_COLOR), (200, 300))
 
 class WinPopup:
     def __init__(self):
         self.action = None
         self.earned_coins = 0 
+        self.font_title = pygame.font.SysFont('tahoma', 50, bold=True)
+        self.font_reward = pygame.font.SysFont('tahoma', 36, bold=True)
         
-        self.btn_replay = Button(WINDOW_WIDTH//2 - 240, WINDOW_HEIGHT//2 + 60, 140, 50, "CHƠI LẠI", (52, 152, 219), (255, 255, 255))
-        self.btn_next = Button(WINDOW_WIDTH//2 - 70, WINDOW_HEIGHT//2 + 60, 140, 50, "TIẾP THEO", (46, 204, 113), (255, 255, 255))
-        self.btn_menu = Button(WINDOW_WIDTH//2 + 100, WINDOW_HEIGHT//2 + 60, 140, 50, "MENU", (231, 76, 60), (255, 255, 255))
+        btn_w, btn_h = 170, 50
+        y_pos = WINDOW_HEIGHT//2 + 60 
+        self.btn_replay = Button(WINDOW_WIDTH//2 - 275, y_pos, btn_w, btn_h, "CHƠI LẠI", (52, 152, 219))
+        self.btn_next = Button(WINDOW_WIDTH//2 - 85, y_pos, btn_w, btn_h, "TIẾP THEO", (46, 204, 113))
+        self.btn_menu = Button(WINDOW_WIDTH//2 + 105, y_pos, btn_w, btn_h, "MENU", (231, 76, 60))
 
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
         mouse_pressed = pygame.mouse.get_pressed()
-        
         self.btn_replay.check_hover(mouse_pos)
         self.btn_next.check_hover(mouse_pos)
         self.btn_menu.check_hover(mouse_pos)
@@ -490,83 +544,111 @@ class WinPopup:
             elif self.btn_menu.is_clicked(mouse_pos, mouse_pressed): self.action = "MENU"
         return None
 
+    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
+        outline_width = 2
+        for dx in [-outline_width, 0, outline_width]:
+            for dy in [-outline_width, 0, outline_width]:
+                if dx != 0 or dy != 0:
+                    txt_surface = font.render(text, True, outline_color)
+                    screen.blit(txt_surface, txt_surface.get_rect(center=(center_pos[0]+dx, center_pos[1]+dy)))
+        
+        txt_surface = font.render(text, True, text_color)
+        screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
+
     def draw(self, screen):
         overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
         screen.blit(overlay, (0, 0))
         
-        box_w, box_h = 560, 260
+        box_w, box_h = 620, 280
         box_x, box_y = (WINDOW_WIDTH - box_w)//2, (WINDOW_HEIGHT - box_h)//2
         pygame.draw.rect(screen, (40, 45, 50), (box_x, box_y, box_w, box_h), border_radius=15)
         pygame.draw.rect(screen, (46, 204, 113), (box_x, box_y, box_w, box_h), 4, border_radius=15)
         
-        font_title = pygame.font.SysFont('tahoma', 45, bold=True)
-        txt_title = font_title.render("HOÀN THÀNH MÀN CHƠI!", True, (46, 204, 113))
-        screen.blit(txt_title, txt_title.get_rect(center=(WINDOW_WIDTH//2, box_y + 50)))
-        
-        font_reward = pygame.font.SysFont('tahoma', 32, bold=True)
-        # Đã đổi thành COIN
-        txt_reward = font_reward.render(f"PHẦN THƯỞNG: +{self.earned_coins} COIN", True, (255, 215, 0))
-        screen.blit(txt_reward, txt_reward.get_rect(center=(WINDOW_WIDTH//2, box_y + 115)))
+        self.draw_text_outline(screen, "HOÀN THÀNH MÀN CHƠI!", self.font_title, (46, 204, 113), (0, 0, 0), (WINDOW_WIDTH//2, box_y + 60))
+        self.draw_text_outline(screen, f"PHẦN THƯỞNG: +{self.earned_coins} COIN", self.font_reward, (255, 215, 0), (0, 0, 0), (WINDOW_WIDTH//2, box_y + 130))
         
         self.btn_replay.draw(screen)
         self.btn_next.draw(screen)
         self.btn_menu.draw(screen)
 
+
 class SkinScreen:
     def __init__(self):
         self.next_state = None
-        self.font = pygame.font.SysFont('tahoma', 40)
-        self.btn_back = Button(20, 20, 150, 50, "QUAY LẠI", INPUT_BOX_COLOR, TEXT_COLOR)
+        self.font = pygame.font.SysFont('tahoma', 40, bold=True)
+        self.btn_back = Button(20, 20, 150, 50, "QUAY LẠI", (100, 100, 100))
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
         self.btn_back.check_hover(mouse_pos)
         if event.type == pygame.MOUSEBUTTONDOWN and self.btn_back.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
             self.next_state = STATE_DASHBOARD
+    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
+        outline_width = 2
+        for dx in [-outline_width, 0, outline_width]:
+            for dy in [-outline_width, 0, outline_width]:
+                if dx != 0 or dy != 0:
+                    txt_surface = font.render(text, True, outline_color)
+                    screen.blit(txt_surface, txt_surface.get_rect(center=(center_pos[0]+dx, center_pos[1]+dy)))
+        txt_surface = font.render(text, True, text_color)
+        screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
     def draw(self, screen): 
-        screen.fill(BG_COLOR)
-        screen.blit(self.font.render("CHỌN SKIN (Tính năng đang phát triển)", True, HIGHLIGHT_COLOR), (WINDOW_WIDTH//2 - 300, 300))
+        screen.fill((30, 30, 30))
+        self.draw_text_outline(screen, "CHỌN SKIN (Đang phát triển)", self.font, (241, 196, 15), (0, 0, 0), (WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
         self.btn_back.draw(screen)
+
 
 class ShopScreen:
     def __init__(self):
         self.next_state = None
         self.font = pygame.font.SysFont('tahoma', 40, bold=True)
-        # Nút Quay lại góc trên bên trái
-        self.btn_back = Button(20, 20, 150, 50, "QUAY LẠI", INPUT_BOX_COLOR, TEXT_COLOR)
+        self.btn_back = Button(20, 20, 150, 50, "QUAY LẠI", (100, 100, 100))
 
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
         self.btn_back.check_hover(mouse_pos)
-        
-        # Bắt sự kiện click vào nút
         if event.type == pygame.MOUSEBUTTONDOWN and self.btn_back.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
             self.next_state = STATE_DASHBOARD
 
+    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
+        outline_width = 2
+        for dx in [-outline_width, 0, outline_width]:
+            for dy in [-outline_width, 0, outline_width]:
+                if dx != 0 or dy != 0:
+                    txt_surface = font.render(text, True, outline_color)
+                    screen.blit(txt_surface, txt_surface.get_rect(center=(center_pos[0]+dx, center_pos[1]+dy)))
+        txt_surface = font.render(text, True, text_color)
+        screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
+
     def draw(self, screen): 
-        screen.fill(BG_COLOR)
-        # Bố trí dòng chữ ngay chính giữa cho đẹp
-        text_surf = self.font.render("CỬA HÀNG (Tính năng đang phát triển)", True, (50, 150, 200))
-        screen.blit(text_surf, text_surf.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2)))
+        screen.fill((30, 30, 30))
+        self.draw_text_outline(screen, "CỬA HÀNG (Đang phát triển)", self.font, (52, 152, 219), (0, 0, 0), (WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
         self.btn_back.draw(screen)
+
 
 class QuestsScreen:
     def __init__(self):
         self.next_state = None
         self.font = pygame.font.SysFont('tahoma', 40, bold=True)
-        # Nút Quay lại góc trên bên trái
-        self.btn_back = Button(20, 20, 150, 50, "QUAY LẠI", INPUT_BOX_COLOR, TEXT_COLOR)
+        self.btn_back = Button(20, 20, 150, 50, "QUAY LẠI", (100, 100, 100))
 
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
         self.btn_back.check_hover(mouse_pos)
-        
-        # Bắt sự kiện click vào nút
         if event.type == pygame.MOUSEBUTTONDOWN and self.btn_back.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
             self.next_state = STATE_DASHBOARD
 
+    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
+        outline_width = 2
+        for dx in [-outline_width, 0, outline_width]:
+            for dy in [-outline_width, 0, outline_width]:
+                if dx != 0 or dy != 0:
+                    txt_surface = font.render(text, True, outline_color)
+                    screen.blit(txt_surface, txt_surface.get_rect(center=(center_pos[0]+dx, center_pos[1]+dy)))
+        txt_surface = font.render(text, True, text_color)
+        screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
+
     def draw(self, screen): 
-        screen.fill(BG_COLOR)
-        text_surf = self.font.render("NHIỆM VỤ (Tính năng đang phát triển)", True, (150, 100, 200))
-        screen.blit(text_surf, text_surf.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2)))
+        screen.fill((30, 30, 30))
+        self.draw_text_outline(screen, "NHIỆM VỤ (Đang phát triển)", self.font, (155, 89, 182), (0, 0, 0), (WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
         self.btn_back.draw(screen)

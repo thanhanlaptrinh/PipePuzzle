@@ -43,7 +43,7 @@ def main():
     global unlocked_levels
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-    pygame.display.set_caption("PIPEMASTER PRO - Chờ 3s Win Game")
+    pygame.display.set_caption("PIPE PUZZLE")
     clock = pygame.time.Clock()
 
     start_screen = StartScreen()
@@ -56,21 +56,19 @@ def main():
     win_popup = WinPopup()
     skin_screen = SkinScreen()
     
-    btn_options = Button(WINDOW_WIDTH - 120, 20, 100, 50, "MENU", INPUT_BOX_COLOR, TEXT_COLOR)
+    btn_options = Button(WINDOW_WIDTH - 120, 20, 100, 50, "MENU", (50, 50, 50), (255, 255, 255))
     
     game_board = None 
     
     # ==================================================
     # 1. FIX: NẠP DỮ LIỆU TỪ "KÉT SẮT" VÀO GAME
     # ==================================================
-    player_name = global_name   # Tên tải từ save_data
-    player_coins = global_coins # Xu tải từ save_data
+    # Tiền và Level vẫn được giữ nguyên không mất 1 cắc
+    player_coins = global_coins 
     
-    # TỰ ĐỘNG BỎ QUA MÀN NHẬP TÊN NẾU ĐÃ CHƠI TỪ TRƯỚC
-    if player_name != "":
-        current_state = STATE_DASHBOARD
-    else:
-        current_state = STATE_MENU_NAME
+    # Xóa trắng tên cũ, luôn luôn bắt đầu ở màn hình Nhập Tên
+    player_name = "" 
+    current_state = STATE_MENU_NAME
     # ==================================================
     
     # Nạp hình nền cho lúc chơi
@@ -280,7 +278,7 @@ def main():
         elif current_state == STATE_LEVEL_SELECT:
             if game_bg: screen.blit(game_bg, (0, 0))
             else: screen.fill(BG_COLOR)
-            level_select_screen.draw(screen, unlocked_levels) # ĐÃ THÊM BIẾN VÀO ĐÂY
+            level_select_screen.draw(screen) # ĐÃ THÊM BIẾN VÀO ĐÂY
         elif current_state == STATE_SHOP: shop_screen.draw(screen)
         elif current_state == STATE_QUESTS: quests_screen.draw(screen)
         elif current_state == STATE_SKIN: skin_screen.draw(screen)
