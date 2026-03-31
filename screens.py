@@ -565,7 +565,7 @@ class WinPopup:
         pygame.draw.rect(screen, (40, 45, 50), (box_x, box_y, box_w, box_h), border_radius=15)
         pygame.draw.rect(screen, (46, 204, 113), (box_x, box_y, box_w, box_h), 4, border_radius=15)
         
-        self.draw_text_outline(screen, "HOÀN THÀNH MÀN CHƠI!", self.font_title, (46, 204, 113), (0, 0, 0), (WINDOW_WIDTH//2, box_y + 60))
+        self.draw_text_outline(screen, "HOÀN THÀNH", self.font_title, (46, 204, 113), (0, 0, 0), (WINDOW_WIDTH//2, box_y + 60))
         self.draw_text_outline(screen, f"PHẦN THƯỞNG: +{self.earned_coins} COIN", self.font_reward, (255, 215, 0), (0, 0, 0), (WINDOW_WIDTH//2, box_y + 130))
         
         self.btn_replay.draw(screen)
