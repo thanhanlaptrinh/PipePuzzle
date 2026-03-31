@@ -107,7 +107,6 @@ def main():
     global unlocked_levels
     pygame.init()
     
-    # --- KHỞI TẠO ÂM THANH TỪ NHÁNH UI2 ---
     pygame.mixer.init()
     try:
         pygame.mixer.music.load("assets/sounds/bgsound.mp3") 
@@ -352,8 +351,16 @@ def main():
                         if quest["id"] == "collect_5000_coins" and not quest["completed"]:
                             if player_coins >= quest["goal"]:
                                 quest["completed"] = True; player_coins += quest["reward"]["coins"]
+                    
+                    # =================================================================
+                    # FIX LOGIC: MỞ KHÓA MÀN MỚI NGAY KHI VỪA THẮNG GAME TẠI ĐÂY!
+                    # =================================================================
+                    if level_select_screen.selected_level == unlocked_levels and unlocked_levels < MAX_LEVELS:
+                        unlocked_levels += 1
+                    
                     save_quests(quests)
                     save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                    
             if is_winning:
                 current_time = pygame.time.get_ticks()
                 if current_time - win_timer >= 2000: show_win = True; is_winning = False 
@@ -382,7 +389,7 @@ def main():
                     current_state = STATE_LEVEL_SELECT; show_win = False; is_winning = False; ai_solving = False; win_popup.action = None
                     ai_animating_pickaxe = False
                 elif win_popup.action == "NEXT":
-                    if level_select_screen.selected_level == unlocked_levels and unlocked_levels < MAX_LEVELS: unlocked_levels += 1; save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)  
+                    # MÀN ĐÃ MỞ TỪ TRƯỚC, BẤM NEXT CHỈ VIỆC CHUYỂN BẢN ĐỒ
                     level_select_screen.selected_level = (level_select_screen.selected_level % MAX_LEVELS) + 1
                     game_board = Board(level_id=level_select_screen.selected_level)
                     show_win = False; is_winning = False; ai_solving = False; is_pickaxe_active = False; show_tutorial = True; win_popup.action = None
