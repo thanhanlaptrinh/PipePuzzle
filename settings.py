@@ -36,3 +36,54 @@ STATE_GAME_PLAY = 3
 STATE_SHOP = 4
 STATE_QUESTS = 5
 STATE_SKIN = 6
+
+QUEST_DEFINITIONS = [
+    {
+        "id": "FIRST_FLOW",
+        "title": "Khai thong dong chay",
+        "desc": "Hoan thanh 1 man choi",
+        "metric": "levels_completed",
+        "target": 1,
+        "reward": 500,
+    },
+    {
+        "id": "APPRENTICE_ENGINEER",
+        "title": "Ky su tap su",
+        "desc": "Hoan thanh 5 man choi",
+        "metric": "levels_completed",
+        "target": 5,
+        "reward": 1800,
+    },
+    {
+        "id": "COIN_HUNTER",
+        "title": "Tho san coin",
+        "desc": "Kiem duoc tong cong 10.000 coin",
+        "metric": "total_coins_earned",
+        "target": 10000,
+        "reward": 2500,
+    },
+    {
+        "id": "AI_ASSISTED",
+        "title": "Tro ly AI",
+        "desc": "Su dung AI giai 3 lan",
+        "metric": "ai_solves_used",
+        "target": 3,
+        "reward": 900,
+    },
+    {
+        "id": "ACT_BREAKER",
+        "title": "Pha dao Act 1",
+        "desc": "Mo khoa den man 12",
+        "metric": "highest_unlocked_level",
+        "target": 12,
+        "reward": 2000,
+    },
+]
+
+QUEST_STAT_DEFAULTS = {
+    "levels_completed": 0,
+    "total_coins_earned": 0,
+    "ai_solves_used": 0,
+    "replays_used": 0,
+    "highest_unlocked_level": 1,
+}

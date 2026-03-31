@@ -13,30 +13,99 @@ from screens import StartScreen, DashboardScreen, LevelSelectScreen, ShopScreen,
 
 SAVE_FILE = "save_data.json"
 
+
+def build_default_quest_data(current_unlocked=1):
+    quest_stats = QUEST_STAT_DEFAULTS.copy()
+    quest_stats["highest_unlocked_level"] = max(1, int(current_unlocked))
+    return {"stats": quest_stats, "claimed": []}
+
+
+def normalize_quest_data(quest_data, current_unlocked=1):
+    if not isinstance(quest_data, dict):
+        return build_default_quest_data(current_unlocked)
+
+    stats = quest_data.get("stats", {})
+    if not isinstance(stats, dict):
+        stats = {}
+
+    fixed_stats = QUEST_STAT_DEFAULTS.copy()
+    for key in fixed_stats:
+        try:
+            fixed_stats[key] = int(stats.get(key, fixed_stats[key]))
+        except (TypeError, ValueError):
+            pass
+
+    fixed_stats["highest_unlocked_level"] = max(
+        fixed_stats["highest_unlocked_level"], int(current_unlocked)
+    )
+
+    claimed = quest_data.get("claimed", [])
+    if not isinstance(claimed, list):
+        claimed = []
+
+    valid_ids = {quest["id"] for quest in QUEST_DEFINITIONS}
+    claimed = [qid for qid in claimed if qid in valid_ids]
+
+    return {"stats": fixed_stats, "claimed": claimed}
+
+
+def get_quest_by_id(quest_id):
+    for quest in QUEST_DEFINITIONS:
+        if quest["id"] == quest_id:
+            return quest
+    return None
+
+
+def is_quest_completed(quest_data, quest):
+    metric = quest["metric"]
+    progress = int(quest_data["stats"].get(metric, 0))
+    return progress >= int(quest["target"])
+
+
+def claim_quest_reward(quest_data, quest_id):
+    if quest_id in quest_data["claimed"]:
+        return 0
+
+    quest = get_quest_by_id(quest_id)
+    if not quest:
+        return 0
+
+    if not is_quest_completed(quest_data, quest):
+        return 0
+
+    quest_data["claimed"].append(quest_id)
+    return int(quest["reward"])
+
 def load_progress():
     """Tải toàn bộ tiến độ: Level, Xu, Tên, và Danh sách Mã đã dùng"""
     if os.path.exists(SAVE_FILE):
         try:
             with open(SAVE_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data.get('unlocked_levels', 1), data.get('coins', 100), data.get('player_name', ""), data.get('redeemed_codes', [])
+                unlocked_levels = data.get('unlocked_levels', 1)
+                coins = data.get('coins', 100)
+                player_name = data.get('player_name', "")
+                redeemed_codes = data.get('redeemed_codes', [])
+                quest_data = normalize_quest_data(data.get('quest_data', {}), unlocked_levels)
+                return unlocked_levels, coins, player_name, redeemed_codes, quest_data
         except:
             pass
-    return 1, 100, "", [] # Trả về list rỗng nếu chưa nhập mã nào
+    return 1, 100, "", [], build_default_quest_data(1) # Trả về list rỗng nếu chưa nhập mã nào
 
-def save_progress(level, coins, name, redeemed_codes):
+def save_progress(level, coins, name, redeemed_codes, quest_data):
     """Lưu toàn bộ dữ liệu vào két sắt"""
     data = {
         'unlocked_levels': level,
         'coins': coins,
         'player_name': name,
-        'redeemed_codes': redeemed_codes
+        'redeemed_codes': redeemed_codes,
+        'quest_data': normalize_quest_data(quest_data, level),
     }
     with open(SAVE_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False)
 
 # KHỞI TẠO BIẾN TOÀN CỤC CHO TIẾN ĐỘ
-unlocked_levels, global_coins, global_name, redeemed_codes = load_progress()
+unlocked_levels, global_coins, global_name, redeemed_codes, global_quest_data = load_progress()
 MAX_LEVELS = 60
 
 def main():
@@ -95,6 +164,7 @@ def main():
     # ==================================================
     # Tiền và Level vẫn được giữ nguyên không mất 1 cắc
     player_coins = global_coins 
+    quest_data = normalize_quest_data(global_quest_data, unlocked_levels)
     
     # Xóa trắng tên cũ, luôn luôn bắt đầu ở màn hình Nhập Tên
     player_name = "" 
@@ -139,14 +209,17 @@ def main():
                     if "UNPIPE" not in redeemed_codes: 
                         redeemed_codes.append("UNPIPE")
                     # ---> THÊM redeemed_codes VÀO ĐÂY <---
-                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes) 
+                    quest_data["stats"]["highest_unlocked_level"] = max(
+                        quest_data["stats"]["highest_unlocked_level"], unlocked_levels
+                    )
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, quest_data)
                     
                 elif action == "ADD_COINS":
                     player_coins += 10000 
                     if "PIPEGOLD" not in redeemed_codes:
                         redeemed_codes.append("PIPEGOLD")
                     # ---> THÊM redeemed_codes VÀO ĐÂY <---
-                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes)
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, quest_data)
                     if sound_coin:
                         sound_coin.set_volume(dashboard_screen.sfx_vol)
                         sound_coin.play()
@@ -156,8 +229,17 @@ def main():
                 level_select_screen.handle_event(event, unlocked_levels)
             elif current_state == STATE_SHOP: 
                 shop_screen.handle_event(event)
-            elif current_state == STATE_QUESTS: 
-                quests_screen.handle_event(event)
+            elif current_state == STATE_QUESTS:
+                quests_action = quests_screen.handle_event(event, quest_data)
+                if quests_action and quests_action[0] == "CLAIM_QUEST":
+                    reward = claim_quest_reward(quest_data, quests_action[1])
+                    if reward > 0:
+                        player_coins += reward
+                        quests_screen.add_notification(f"+{reward} COIN", (255, 215, 0))
+                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, quest_data)
+                        if sound_coin:
+                            sound_coin.set_volume(dashboard_screen.sfx_vol)
+                            sound_coin.play()
             elif current_state == STATE_SKIN: 
                 skin_screen.handle_event(event)
 
@@ -207,6 +289,8 @@ def main():
                     win_timer = pygame.time.get_ticks() 
                     earned = random.randint(1000, 1500)
                     player_coins += earned
+                    quest_data["stats"]["levels_completed"] += 1
+                    quest_data["stats"]["total_coins_earned"] += earned
                     if sound_coin:
                         sound_coin.set_volume(dashboard_screen.sfx_vol) # Lấy âm lượng SFX từ cài đặt
                         sound_coin.play()
@@ -214,7 +298,7 @@ def main():
                         sound_win.set_volume(dashboard_screen.sfx_vol)
                         sound_win.play()
                     win_popup.earned_coins = earned # Gửi số tiền sang bảng Win để khoe
-                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes)
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, quest_data)
                     
             if is_winning:
                 current_time = pygame.time.get_ticks()
@@ -229,7 +313,7 @@ def main():
             player_name = start_screen.player_name
             current_state = STATE_DASHBOARD
             start_screen.next_state = STATE_MENU_NAME 
-            save_progress(unlocked_levels, player_coins, player_name, redeemed_codes)
+            save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, quest_data)
             
         elif current_state == STATE_DASHBOARD and dashboard_screen.next_state is not None:
             current_state = dashboard_screen.next_state
@@ -273,7 +357,10 @@ def main():
                     # Mở khóa màn mới
                     if level_select_screen.selected_level == unlocked_levels and unlocked_levels < MAX_LEVELS:
                         unlocked_levels += 1
-                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes)  
+                        quest_data["stats"]["highest_unlocked_level"] = max(
+                            quest_data["stats"]["highest_unlocked_level"], unlocked_levels
+                        )
+                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, quest_data)
 
                     level_select_screen.selected_level = (level_select_screen.selected_level % MAX_LEVELS) + 1
                     game_board = Board(level_id=level_select_screen.selected_level)
@@ -284,6 +371,7 @@ def main():
                     win_popup.action = None
                 
                 elif win_popup.action == "REPLAY":
+                    quest_data["stats"]["replays_used"] += 1
                     game_board = Board(level_id=level_select_screen.selected_level)
                     show_win = False
                     is_winning = False
@@ -302,6 +390,7 @@ def main():
                     ai_solving = False 
                     pause_menu.action = None
                 elif pause_menu.action == "AI_SOLVE":
+                    quest_data["stats"]["ai_solves_used"] += 1
                     ai_solving = True                    
                     is_paused = False
                     pause_menu.action = None
@@ -322,7 +411,7 @@ def main():
             else: screen.fill(BG_COLOR)
             level_select_screen.draw(screen) # ĐÃ THÊM BIẾN VÀO ĐÂY
         elif current_state == STATE_SHOP: shop_screen.draw(screen)
-        elif current_state == STATE_QUESTS: quests_screen.draw(screen)
+        elif current_state == STATE_QUESTS: quests_screen.draw(screen, quest_data)
         elif current_state == STATE_SKIN: skin_screen.draw(screen)
         
         elif current_state == STATE_GAME_PLAY and game_board:

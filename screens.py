@@ -646,14 +646,68 @@ class ShopScreen:
 class QuestsScreen:
     def __init__(self):
         self.next_state = None
-        self.font = pygame.font.SysFont('tahoma', 40, bold=True)
+        self.font = pygame.font.SysFont('tahoma', 44, bold=True)
+        self.font_card_title = pygame.font.SysFont('tahoma', 24, bold=True)
+        self.font_card_desc = pygame.font.SysFont('tahoma', 19, bold=True)
+        self.font_small = pygame.font.SysFont('tahoma', 17, bold=True)
         self.btn_back = Button(20, 20, 150, 50, "QUAY LẠI", (100, 100, 100))
+        self.quest_buttons = {}
+        self.notifications = []
 
-    def handle_event(self, event):
+        card_x = 50
+        card_y = 95
+        card_h = 82
+        gap = 8
+        for i, quest in enumerate(QUEST_DEFINITIONS):
+            y = card_y + i * (card_h + gap)
+            btn = Button(card_x + 715, y + 20, 180, 40, "NHẬN", (46, 204, 113))
+            btn.font = pygame.font.SysFont('tahoma', 24, bold=True)
+            self.quest_buttons[quest["id"]] = btn
+
+    def add_notification(self, text, color=(255, 215, 0)):
+        self.notifications.append(
+            {
+                "text": text,
+                "x": WINDOW_WIDTH // 2,
+                "y": WINDOW_HEIGHT - 40,
+                "alpha": 255,
+                "color": color,
+            }
+        )
+
+    def _quest_progress(self, quest_data, quest):
+        stats = quest_data.get("stats", {})
+        return int(stats.get(quest["metric"], 0))
+
+    def _is_claimed(self, quest_data, quest_id):
+        return quest_id in quest_data.get("claimed", [])
+
+    def _is_completed(self, quest_data, quest):
+        return self._quest_progress(quest_data, quest) >= int(quest["target"])
+
+    def handle_event(self, event, quest_data):
         mouse_pos = pygame.mouse.get_pos()
         self.btn_back.check_hover(mouse_pos)
+        for quest in QUEST_DEFINITIONS:
+            btn = self.quest_buttons[quest["id"]]
+            btn.check_hover(mouse_pos)
+
         if event.type == pygame.MOUSEBUTTONDOWN and self.btn_back.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
             self.next_state = STATE_DASHBOARD
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            pressed = pygame.mouse.get_pressed()
+            for quest in QUEST_DEFINITIONS:
+                quest_id = quest["id"]
+                btn = self.quest_buttons[quest_id]
+                if self._is_claimed(quest_data, quest_id):
+                    continue
+                if not self._is_completed(quest_data, quest):
+                    continue
+                if btn.is_clicked(mouse_pos, pressed):
+                    return ("CLAIM_QUEST", quest_id)
+
+        return None
 
     def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
         outline_width = 2
@@ -665,7 +719,78 @@ class QuestsScreen:
         txt_surface = font.render(text, True, text_color)
         screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
 
-    def draw(self, screen): 
-        screen.fill((30, 30, 30))
-        self.draw_text_outline(screen, "NHIỆM VỤ (Đang phát triển)", self.font, (155, 89, 182), (0, 0, 0), (WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
+    def draw(self, screen, quest_data):
+        screen.fill((24, 27, 33))
+        self.draw_text_outline(screen, "NHIỆM VỤ", self.font, (178, 104, 205), (0, 0, 0), (WINDOW_WIDTH//2, 52))
+
+        card_x = 50
+        card_y = 95
+        card_w = 900
+        card_h = 82
+        gap = 8
+
+        for i, quest in enumerate(QUEST_DEFINITIONS):
+            y = card_y + i * (card_h + gap)
+            progress = self._quest_progress(quest_data, quest)
+            target = int(quest["target"])
+            clamped = min(progress, target)
+            completed = progress >= target
+            claimed = self._is_claimed(quest_data, quest["id"])
+
+            bg = (40, 45, 57) if not completed else (34, 72, 53)
+            border = (115, 127, 159) if not completed else (46, 204, 113)
+            pygame.draw.rect(screen, bg, (card_x, y, card_w, card_h), border_radius=12)
+            pygame.draw.rect(screen, border, (card_x, y, card_w, card_h), 2, border_radius=12)
+
+            title_surface = self.font_card_title.render(quest["title"], True, (255, 255, 255))
+            title_shadow = self.font_card_title.render(quest["title"], True, (0, 0, 0))
+            screen.blit(title_shadow, (card_x + 22 + 2, y + 12 + 2))
+            screen.blit(title_surface, (card_x + 22, y + 12))
+
+            desc_text = f"{quest['desc']}  |  THƯỞNG: +{quest['reward']} coin"
+            desc_surface = self.font_card_desc.render(desc_text, True, (222, 224, 230))
+            desc_shadow = self.font_card_desc.render(desc_text, True, (0, 0, 0))
+            screen.blit(desc_shadow, (card_x + 22 + 2, y + 40 + 2))
+            screen.blit(desc_surface, (card_x + 22, y + 40))
+
+            bar_x, bar_y, bar_w, bar_h = card_x + 22, y + 63, 430, 10
+            pygame.draw.rect(screen, (18, 20, 25), (bar_x, bar_y, bar_w, bar_h), border_radius=6)
+            fill_w = int(bar_w * (clamped / target)) if target > 0 else 0
+            if fill_w > 0:
+                pygame.draw.rect(screen, (75, 166, 235), (bar_x, bar_y, fill_w, bar_h), border_radius=6)
+            pygame.draw.rect(screen, (190, 196, 210), (bar_x, bar_y, bar_w, bar_h), 1, border_radius=6)
+
+            progress_text = f"Tiến độ: {clamped}/{target}"
+            progress_surface = self.font_small.render(progress_text, True, (245, 245, 245))
+            progress_shadow = self.font_small.render(progress_text, True, (0, 0, 0))
+            progress_x = bar_x + bar_w + 38
+            progress_y = y + 57
+            screen.blit(progress_shadow, (progress_x + 2, progress_y + 2))
+            screen.blit(progress_surface, (progress_x, progress_y))
+
+            btn = self.quest_buttons[quest["id"]]
+            btn.rect.x = card_x + 715
+            btn.rect.y = y + 20
+            if claimed:
+                btn.text = "ĐÃ NHẬN"
+                btn.bg_color = (110, 110, 110)
+                btn.is_enabled = False
+            elif completed:
+                btn.text = "NHẬN"
+                btn.bg_color = (46, 204, 113)
+                btn.is_enabled = True
+            else:
+                btn.text = "CHƯA XONG"
+                btn.bg_color = (130, 130, 130)
+                btn.is_enabled = False
+            btn.draw(screen)
+
+        font_notif = pygame.font.SysFont("tahoma", 30, bold=True)
+        for notif in self.notifications[:]:
+            self.draw_text_outline(screen, notif["text"], font_notif, notif["color"], (0, 0, 0), (notif["x"], notif["y"]))
+            notif["y"] -= 1
+            notif["alpha"] -= 4
+            if notif["alpha"] <= 0:
+                self.notifications.remove(notif)
+
         self.btn_back.draw(screen)
