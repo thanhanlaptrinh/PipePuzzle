@@ -199,7 +199,44 @@ def main():
                         sound_coin.play()
                     
             elif current_state == STATE_LEVEL_SELECT: level_select_screen.handle_event(event, unlocked_levels)
-            elif current_state == STATE_SHOP: shop_screen.handle_event(event)
+            elif current_state == STATE_SHOP: 
+                # Nhận action_id từ Shop (ví dụ: BUY_ACT_2)
+                action = shop_screen.handle_event(event, player_coins, player_pickaxes, unlocked_levels)
+                
+                if action == "BUY_PICKAXE_1":
+                    player_coins -= 100; player_pickaxes += 1
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                    if sound_coin:
+                        try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
+                        except: pass
+                        
+                elif action == "BUY_PICKAXE_3":
+                    player_coins -= 250; player_pickaxes = 3
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                    if sound_coin:
+                        try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
+                        except: pass
+                        
+                # --- XỬ LÝ MUACHAPTER LẺ (ACTS 2-5) ---
+                elif action and action.startswith("BUY_ACT_"):
+                    # Lấy số Act từ ID (ví dụ: BUY_ACT_2 -> 2)
+                    act_num = int(action.split('_')[-1])
+                    
+                    # Mua act nào mở màn đầu tiên của act đó
+                    # Ví dụ: Mua Act 2 mở màn 13
+                    act_start_level = (act_num - 1) * 12 + 1
+                    
+                    if player_coins >= 1500 and unlocked_levels < act_start_level:
+                        player_coins -= 1500
+                        unlocked_levels = act_start_level # Chỉ mở tới màn đầu của Act vừa mua
+                        
+                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                        
+                        # Phát tiếng win chúc mừng mua đồ xịn
+                        if sound_win:
+                            try: sound_win.set_volume(dashboard_screen.sfx_vol); sound_win.play()
+                            except: pass
+
             elif current_state == STATE_QUESTS: quests_screen.handle_event(event)
             elif current_state == STATE_SKIN: skin_screen.handle_event(event)
 
@@ -426,7 +463,7 @@ def main():
             if game_bg: screen.blit(game_bg, (0, 0))
             else: screen.fill(BG_COLOR)
             level_select_screen.draw(screen)
-        elif current_state == STATE_SHOP: shop_screen.draw(screen)
+        elif current_state == STATE_SHOP: shop_screen.draw(screen, player_coins, player_pickaxes)
         elif current_state == STATE_QUESTS: quests_screen.draw(screen)
         elif current_state == STATE_SKIN: skin_screen.draw(screen)
         elif current_state == STATE_GAME_PLAY and game_board:
