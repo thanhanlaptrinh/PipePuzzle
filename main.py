@@ -106,6 +106,25 @@ MAX_LEVELS = 60
 def main():
     global unlocked_levels
     pygame.init()
+    
+    # --- KHỞI TẠO ÂM THANH TỪ NHÁNH UI2 ---
+    pygame.mixer.init()
+    try:
+        pygame.mixer.music.load("assets/sounds/bgsound.mp3") 
+        pygame.mixer.music.set_volume(1.0)
+        pygame.mixer.music.play(-1) 
+    except pygame.error as e:
+        print(f"Không tải được nhạc nền: {e}")
+        
+    try: sound_coin = pygame.mixer.Sound("assets/sounds/coin.mp3")
+    except pygame.error: sound_coin = None
+        
+    try: sound_win = pygame.mixer.Sound("assets/sounds/win.mp3")
+    except pygame.error: sound_win = None
+        
+    try: sound_button = pygame.mixer.Sound("assets/sounds/button.mp3")
+    except pygame.error: sound_button = None
+
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     pygame.display.set_caption("PIPE PUZZLE")
     clock = pygame.time.Clock()
@@ -175,6 +194,10 @@ def main():
                     player_coins += 10000 
                     if "PIPEGOLD" not in redeemed_codes: redeemed_codes.append("PIPEGOLD")
                     save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                    if sound_coin:
+                        try: sound_coin.set_volume(dashboard_screen.sfx_vol)
+                        except: pass
+                        sound_coin.play()
                     
             elif current_state == STATE_LEVEL_SELECT: level_select_screen.handle_event(event, unlocked_levels)
             elif current_state == STATE_SHOP: shop_screen.handle_event(event)
@@ -216,6 +239,10 @@ def main():
                                     ai_solving = False; ai_paused_for_pickaxe = False
                                 else:
                                     game_board.handle_click(mouse_pos[0], mouse_pos[1])
+                                    if sound_button:
+                                        try: sound_button.set_volume(dashboard_screen.sfx_vol)
+                                        except: pass
+                                        sound_button.play()
                                     ai_solving = False; ai_paused_for_pickaxe = False 
                     if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                         is_paused = True; is_pickaxe_active = False; ai_paused_for_pickaxe = False
@@ -238,12 +265,9 @@ def main():
                     ai_pickaxe_current_pos[0] = sx + (tx - sx) * p
                     ai_pickaxe_current_pos[1] = sy + (ty - sy) * p
 
-            # =================================================================
-            # FIX: KHÓA AI NGAY LẬP TỨC KHI GAME ĐÃ THẮNG
-            # =================================================================
             if ai_solving and not show_win and not is_paused and not ai_animating_pickaxe and not is_winning:
                 if game_board.check_win():
-                    ai_solving = False # Dừng giải ngay lập tức khi nối thông mạch!
+                    ai_solving = False 
                 else:
                     current_time = pygame.time.get_ticks()
                     if current_time - ai_timer >= 150: 
@@ -259,6 +283,10 @@ def main():
                             row, col, rotations = move 
                             for _ in range(rotations): game_board.grid[row][col].rotate()
                             game_board.update_connectivity()
+                            if sound_button:
+                                try: sound_button.set_volume(dashboard_screen.sfx_vol)
+                                except: pass
+                                sound_button.play()
                             ai_timer = current_time 
                         else:
                             rocks_on_board = []
@@ -306,6 +334,16 @@ def main():
                 if game_board.check_win():
                     is_winning = True; win_timer = pygame.time.get_ticks() 
                     earned = random.randint(1000, 1500); player_coins += earned
+                    
+                    if sound_coin:
+                        try: sound_coin.set_volume(dashboard_screen.sfx_vol)
+                        except: pass
+                        sound_coin.play()
+                    if sound_win:
+                        try: sound_win.set_volume(dashboard_screen.sfx_vol)
+                        except: pass
+                        sound_win.play()
+                        
                     win_popup.earned_coins = earned 
                     for quest in quests:
                         if quest["id"] == "win_1_level" and not quest["completed"]:
