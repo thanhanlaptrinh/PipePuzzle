@@ -450,9 +450,14 @@ class PauseMenu:
         self.overlay.fill((0, 0, 0))
         center_x, center_y = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
         
-        self.btn_restart = Button(center_x - 100, center_y - 100, 200, 50, "CHƠI LẠI", (52, 152, 219))
-        self.btn_ai = Button(center_x - 100, center_y - 30, 200, 50, "AI GIẢI (-100)", (155, 89, 182))
-        self.btn_exit = Button(center_x - 100, center_y + 40, 200, 50, "THOÁT MÀN", (231, 76, 60))
+        # --- ĐÃ TĂNG CHIỀU RỘNG NÚT LÊN 260 ĐỂ KHÔNG TRÀN CHỮ ---
+        btn_w = 260
+        btn_h = 50
+        start_x = center_x - (btn_w // 2)
+        
+        self.btn_restart = Button(start_x, center_y - 100, btn_w, btn_h, "CHƠI LẠI", (52, 152, 219))
+        self.btn_ai = Button(start_x, center_y - 30, btn_w, btn_h, "AI GIẢI (-100)", (155, 89, 182))
+        self.btn_exit = Button(start_x, center_y + 40, btn_w, btn_h, "THOÁT MÀN", (231, 76, 60))
         self.action = None 
         
         self.error_msg = ""
