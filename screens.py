@@ -2,7 +2,6 @@ import pygame
 from settings import *
 
 class Button:
-    # --- ĐÃ SỬA TÊN BIẾN THÀNH disable_hover_effect ĐỂ TẮT TOÀN BỘ HIỆU ỨNG ---
     def __init__(self, x, y, w, h, text, bg_color, text_color=(255, 255, 255), disable_hover_effect=False):
         self.rect = pygame.Rect(x, y, w, h)
         self.text = text
@@ -23,20 +22,17 @@ class Button:
         return self.is_enabled and self.rect.collidepoint(mouse_pos) and mouse_pressed[0]
 
     def draw(self, screen):
-        # --- LÔ GIC KIỂM TRA HIỆU ỨNG CHUẨN XÁC HƠN ---
         if not self.is_enabled:
             current_bg = (100, 100, 100)
             current_text = (150, 150, 150)
             border_color = (100, 100, 100)
             border_width = 2
         elif self.is_hovered and self.bg_color != (0, 0, 0, 0) and not self.disable_hover_effect:
-            # Nếu đang Hover và KHÔNG BỊ CẤM hiệu ứng -> Sáng lên
             current_bg = (min(255, self.bg_color[0] + 30), min(255, self.bg_color[1] + 30), min(255, self.bg_color[2] + 30))
             current_text = (255, 215, 0) 
             border_color = (0, 255, 255) 
             border_width = 3
         else:
-            # Bình thường hoặc BỊ CẤM hiệu ứng -> Giữ nguyên màu gốc
             current_bg = self.bg_color
             current_text = self.text_color
             border_color = (200, 200, 200) 
@@ -163,9 +159,7 @@ class DashboardScreen:
         self.btn_opt_exit = Button(box_x + 40, box_y + 350, 150, 50, "THOÁT", (231, 76, 60))
         self.btn_opt_rename = Button(box_x + 225, box_y + 350, 150, 50, "ĐỔI TÊN", (52, 152, 219))
         
-        # --- ĐÃ ĐỔI MÀU CHỮ THÀNH TRẮNG VÀ CẤM HOÀN TOÀN HOVER ---
         self.btn_opt_giftcode = Button(box_x + 410, box_y + 350, 150, 50, "GIFTCODE", (241, 196, 15), (255, 255, 255), disable_hover_effect=True)
-        
         self.btn_opt_close = Button(box_x + box_w - 50, box_y + 10, 40, 40, "X", (231, 76, 60))
 
         self.music_vol = 1.0
@@ -174,6 +168,13 @@ class DashboardScreen:
         self.rect_sfx_slider = pygame.Rect(box_x + 220, box_y + 255, 300, 25)
         self.is_dragging_music = False
         self.is_dragging_sfx = False
+
+        # GHI NHẬN: Nền Sky của bạn Sếp
+        try:
+            self.bg_sky = pygame.image.load("assets/images/sky.png").convert()
+            self.bg_sky = pygame.transform.smoothscale(self.bg_sky, (WINDOW_WIDTH, WINDOW_HEIGHT))
+        except:
+            self.bg_sky = None
 
     def handle_event(self, event, redeemed_codes):
         mouse_pos = pygame.mouse.get_pos()
@@ -275,7 +276,10 @@ class DashboardScreen:
         screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
 
     def draw(self, screen, player_name, coins):
-        screen.fill((30, 30, 30)) 
+        if self.bg_sky:
+            screen.blit(self.bg_sky, (0, 0))
+        else:
+            screen.fill((30, 30, 30))
         
         font_info = pygame.font.SysFont("tahoma", 32, bold=True)
         self.draw_text_outline(screen, f"PLAYER: {player_name}", font_info, (255, 255, 255), (0,0,0), (220, 40))
@@ -298,7 +302,6 @@ class DashboardScreen:
             pygame.draw.rect(screen, (40, 45, 50), (box_x, box_y, box_w, box_h), border_radius=15)
             pygame.draw.rect(screen, (0, 255, 255), (box_x, box_y, box_w, box_h), 4, border_radius=15)
             
-            # --- ĐÃ ĐỔI TÊN THÀNH OPTIONS ---
             self.draw_text_outline(screen, "OPTIONS", self.font_title, (0, 255, 255), (0,0,0), (WINDOW_WIDTH//2, box_y + 70))
             
             self.draw_text_outline(screen, "NHẠC NỀN", self.font_small, (255, 255, 255), (0,0,0), (box_x + 120, box_y + 165))
@@ -448,25 +451,45 @@ class PauseMenu:
         center_x, center_y = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
         
         self.btn_restart = Button(center_x - 100, center_y - 100, 200, 50, "CHƠI LẠI", (52, 152, 219))
-        self.btn_ai = Button(center_x - 100, center_y - 30, 200, 50, "AI GIẢI", (155, 89, 182))
+        self.btn_ai = Button(center_x - 100, center_y - 30, 200, 50, "AI GIẢI (-100)", (155, 89, 182))
         self.btn_exit = Button(center_x - 100, center_y + 40, 200, 50, "THOÁT MÀN", (231, 76, 60))
         self.action = None 
+        
+        self.error_msg = ""
+        self.error_alpha = 0
+        self.font_err = pygame.font.SysFont('tahoma', 28, bold=True)
         
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
         mouse_pressed = pygame.mouse.get_pressed()
-        self.btn_restart.check_hover(mouse_pos); self.btn_ai.check_hover(mouse_pos); self.btn_exit.check_hover(mouse_pos)
+        self.btn_restart.check_hover(mouse_pos)
+        self.btn_ai.check_hover(mouse_pos)
+        self.btn_exit.check_hover(mouse_pos)
         
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.btn_restart.is_clicked(mouse_pos, mouse_pressed): self.action = "RESTART"
             elif self.btn_ai.is_clicked(mouse_pos, mouse_pressed): self.action = "AI_SOLVE"
             elif self.btn_exit.is_clicked(mouse_pos, mouse_pressed): self.action = "EXIT"
 
+    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
+        outline_width = 2
+        for dx in [-outline_width, 0, outline_width]:
+            for dy in [-outline_width, 0, outline_width]:
+                if dx != 0 or dy != 0:
+                    txt_surface = font.render(text, True, outline_color)
+                    screen.blit(txt_surface, txt_surface.get_rect(center=(center_pos[0]+dx, center_pos[1]+dy)))
+        txt_surface = font.render(text, True, text_color)
+        screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
+
     def draw(self, screen):
         screen.blit(self.overlay, (0, 0))
         self.btn_restart.draw(screen)
         self.btn_ai.draw(screen)
         self.btn_exit.draw(screen)
+        
+        if self.error_alpha > 0:
+            self.draw_text_outline(screen, self.error_msg, self.font_err, (255, 50, 50), (0, 0, 0), (WINDOW_WIDTH//2, WINDOW_HEIGHT//2 + 130))
+            self.error_alpha -= 5
 
 
 class TutorialPopup:
@@ -565,7 +588,7 @@ class WinPopup:
         pygame.draw.rect(screen, (40, 45, 50), (box_x, box_y, box_w, box_h), border_radius=15)
         pygame.draw.rect(screen, (46, 204, 113), (box_x, box_y, box_w, box_h), 4, border_radius=15)
         
-        self.draw_text_outline(screen, "HOÀN THÀNH", self.font_title, (46, 204, 113), (0, 0, 0), (WINDOW_WIDTH//2, box_y + 60))
+        self.draw_text_outline(screen, "HOÀN THÀNH MÀN CHƠI!", self.font_title, (46, 204, 113), (0, 0, 0), (WINDOW_WIDTH//2, box_y + 60))
         self.draw_text_outline(screen, f"PHẦN THƯỞNG: +{self.earned_coins} COIN", self.font_reward, (255, 215, 0), (0, 0, 0), (WINDOW_WIDTH//2, box_y + 130))
         
         self.btn_replay.draw(screen)
@@ -626,10 +649,19 @@ class ShopScreen:
         self.btn_back.draw(screen)
 
 
+# ========================================================
+# ĐÃ GỘP HOÀN HẢO CLASS NHIỆM VỤ (QUESTS SCREEN)
+# ========================================================
 class QuestsScreen:
-    def __init__(self):
+    def __init__(self, quests_list):
+        self.quests = quests_list  # Nhận list nhiệm vụ từ main.py truyền vào
         self.next_state = None
-        self.font = pygame.font.SysFont('tahoma', 40, bold=True)
+        
+        # Load các font chữ xịn xò để hiển thị
+        self.font_title = pygame.font.SysFont('tahoma', 50, bold=True)
+        self.font_quest_title = pygame.font.SysFont('tahoma', 26, bold=True)
+        self.font_quest_desc = pygame.font.SysFont('tahoma', 20, bold=True)
+        
         self.btn_back = Button(20, 20, 150, 50, "QUAY LẠI", (100, 100, 100))
 
     def handle_event(self, event):
@@ -638,17 +670,55 @@ class QuestsScreen:
         if event.type == pygame.MOUSEBUTTONDOWN and self.btn_back.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
             self.next_state = STATE_DASHBOARD
 
-    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
+    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos=None, topleft_pos=None):
+        """Hàm vẽ chữ viền đen. Hỗ trợ cả căn giữa (center) và căn góc (topleft)"""
         outline_width = 2
         for dx in [-outline_width, 0, outline_width]:
             for dy in [-outline_width, 0, outline_width]:
                 if dx != 0 or dy != 0:
                     txt_surface = font.render(text, True, outline_color)
-                    screen.blit(txt_surface, txt_surface.get_rect(center=(center_pos[0]+dx, center_pos[1]+dy)))
+                    if topleft_pos:
+                        screen.blit(txt_surface, (topleft_pos[0]+dx, topleft_pos[1]+dy))
+                    else:
+                        screen.blit(txt_surface, txt_surface.get_rect(center=(center_pos[0]+dx, center_pos[1]+dy)))
         txt_surface = font.render(text, True, text_color)
-        screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
+        if topleft_pos:
+            screen.blit(txt_surface, topleft_pos)
+        else:
+            screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
 
     def draw(self, screen): 
         screen.fill((30, 30, 30))
-        self.draw_text_outline(screen, "NHIỆM VỤ (Đang phát triển)", self.font, (155, 89, 182), (0, 0, 0), (WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
+        
+        # Vẽ tiêu đề bự
+        self.draw_text_outline(screen, "BẢNG NHIỆM VỤ", self.font_title, (155, 89, 182), (0, 0, 0), center_pos=(WINDOW_WIDTH//2, 60))
+        
+        # Vẽ các nhiệm vụ từ danh sách
+        y_offset = 150
+        for quest in self.quests:
+            # 1. Khung xám cho mỗi nhiệm vụ
+            quest_rect = pygame.Rect(100, y_offset, WINDOW_WIDTH - 200, 90)
+            pygame.draw.rect(screen, (40, 45, 50), quest_rect, border_radius=10)
+            pygame.draw.rect(screen, (155, 89, 182), quest_rect, width=2, border_radius=10)
+            
+            # 2. Tên nhiệm vụ (Màu xanh nếu xong, Trắng nếu chưa)
+            text_color = (46, 204, 113) if quest["completed"] else (255, 255, 255)
+            self.draw_text_outline(screen, quest["title"], self.font_quest_title, text_color, (0,0,0), topleft_pos=(120, y_offset + 15))
+            
+            # 3. Tiến độ (Màu xám)
+            progress_text = f"Tiến độ: {quest['progress']} / {quest['goal']}"
+            self.draw_text_outline(screen, progress_text, self.font_quest_desc, (200, 200, 200), (0,0,0), topleft_pos=(120, y_offset + 55))
+            
+            # 4. Phần thưởng (Màu Vàng)
+            reward_text = f"Thưởng: {quest['reward']['coins']} XU"
+            self.draw_text_outline(screen, reward_text, self.font_quest_title, (255, 215, 0), (0,0,0), topleft_pos=(500, y_offset + 30))
+            
+            # 5. Trạng thái (Chữ Xanh "ĐÃ NHẬN" hoặc Đỏ "ĐANG LÀM")
+            status_text = "ĐÃ NHẬN" if quest["completed"] else "CHƯA XONG"
+            status_color = (46, 204, 113) if quest["completed"] else (231, 76, 60)
+            self.draw_text_outline(screen, status_text, self.font_quest_title, status_color, (0,0,0), topleft_pos=(750, y_offset + 30))
+
+            y_offset += 110 # Đẩy dòng xuống cho nhiệm vụ tiếp theo
+
+        # Vẽ nút Quay Lại
         self.btn_back.draw(screen)

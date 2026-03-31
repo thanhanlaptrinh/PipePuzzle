@@ -1,15 +1,16 @@
-# main.py
 import json
 import os
 import pygame
 import sys
 import random
+import io
 from settings import *
 from board import Board
 from hill_climbing import get_best_single_rotation
 from screens import StartScreen, DashboardScreen, LevelSelectScreen, ShopScreen, QuestsScreen, PauseMenu, TutorialPopup, WinPopup, Button, SkinScreen
 
-# main.py (Thay thế đoạn đầu file)
+# Cấu hình UTF-8 cho Terminal của bạn Sếp
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 SAVE_FILE = "save_data.json"
 
@@ -22,7 +23,7 @@ def load_progress():
                 return data.get('unlocked_levels', 1), data.get('coins', 100), data.get('player_name', ""), data.get('redeemed_codes', [])
         except:
             pass
-    return 1, 100, "", [] # Trả về list rỗng nếu chưa nhập mã nào
+    return 1, 100, "", []
 
 def save_progress(level, coins, name, redeemed_codes):
     """Lưu toàn bộ dữ liệu vào két sắt"""
@@ -35,8 +36,57 @@ def save_progress(level, coins, name, redeemed_codes):
     with open(SAVE_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False)
 
+# --- Template dữ liệu nhiệm vụ (Của bạn Sếp) ---
+quests_data_template = [
+    {
+        "id": "win_1_level",
+        "title": "Thắng 1 màn",
+        "description": "Hoàn thành 1 màn chơi",
+        "goal": 1,
+        "progress": 0,
+        "reward": {"coins": 500},
+        "completed": False
+    },
+    {
+        "id": "collect_5000_coins",
+        "title": "Thu thập 5000 xu",
+        "description": "Tích lũy 5000 xu",
+        "goal": 5000,
+        "progress": 0,
+        "reward": {"coins": 1000},
+        "completed": False
+    }
+]
+
+def load_quests():
+    """Load tiến độ nhiệm vụ từ file save"""
+    if os.path.exists(SAVE_FILE):
+        try:
+            with open(SAVE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get("quests", [q.copy() for q in quests_data_template])
+        except:
+            pass
+    return [q.copy() for q in quests_data_template]
+
+def save_quests(quests):
+    """Lưu tiến độ nhiệm vụ vào file save"""
+    if os.path.exists(SAVE_FILE):
+        try:
+            with open(SAVE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except:
+            data = {}
+    else:
+        data = {}
+
+    data["quests"] = quests
+    with open(SAVE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
+
 # KHỞI TẠO BIẾN TOÀN CỤC CHO TIẾN ĐỘ
 unlocked_levels, global_coins, global_name, redeemed_codes = load_progress()
+quests = load_quests()
 MAX_LEVELS = 60
 
 def main():
@@ -50,7 +100,7 @@ def main():
     dashboard_screen = DashboardScreen()
     level_select_screen = LevelSelectScreen()
     shop_screen = ShopScreen()
-    quests_screen = QuestsScreen()
+    quests_screen = QuestsScreen(quests)
     pause_menu = PauseMenu()
     tutorial_popup = TutorialPopup()
     win_popup = WinPopup()
@@ -60,18 +110,10 @@ def main():
     
     game_board = None 
     
-    # ==================================================
-    # 1. FIX: NẠP DỮ LIỆU TỪ "KÉT SẮT" VÀO GAME
-    # ==================================================
-    # Tiền và Level vẫn được giữ nguyên không mất 1 cắc
     player_coins = global_coins 
-    
-    # Xóa trắng tên cũ, luôn luôn bắt đầu ở màn hình Nhập Tên
     player_name = "" 
     current_state = STATE_MENU_NAME
-    # ==================================================
     
-    # Nạp hình nền cho lúc chơi
     try:
         raw_game_bg = pygame.image.load(BG_GAME_PATH).convert()
         game_bg = pygame.transform.smoothscale(raw_game_bg, (WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -79,7 +121,6 @@ def main():
         print(f"Không tải được ảnh nền game: {e}")
         game_bg = None
     
-    # --- CÁC BIẾN QUẢN LÝ POPUP & THỜI GIAN CHỜ ---
     is_paused = False 
     show_tutorial = False 
     show_win = False
@@ -93,13 +134,10 @@ def main():
         events = pygame.event.get()
         mouse_pos = pygame.mouse.get_pos()
         
-        # ==========================================
-        # 1. BẮT SỰ KIỆN
-        # ==========================================
         for event in events:
             if event.type == pygame.QUIT: running = False
             
-            if current_state == STATE_MENU_NAME:                 
+            if current_state == STATE_MENU_NAME:                
                 start_screen.handle_event(event)
 
             elif current_state == STATE_DASHBOARD: 
@@ -108,18 +146,15 @@ def main():
                     unlocked_levels = MAX_LEVELS
                     if "UNPIPE" not in redeemed_codes: 
                         redeemed_codes.append("UNPIPE")
-                    # ---> THÊM redeemed_codes VÀO ĐÂY <---
                     save_progress(unlocked_levels, player_coins, player_name, redeemed_codes) 
                     
                 elif action == "ADD_COINS":
                     player_coins += 10000 
                     if "PIPEGOLD" not in redeemed_codes:
                         redeemed_codes.append("PIPEGOLD")
-                    # ---> THÊM redeemed_codes VÀO ĐÂY <---
                     save_progress(unlocked_levels, player_coins, player_name, redeemed_codes)
                     
             elif current_state == STATE_LEVEL_SELECT: 
-                # Bỏ cái đón giftcode đi, giờ chỉ xử lý click chọn màn thôi
                 level_select_screen.handle_event(event, unlocked_levels)
             elif current_state == STATE_SHOP: 
                 shop_screen.handle_event(event)
@@ -136,7 +171,7 @@ def main():
                 elif is_paused:
                     pause_menu.handle_event(event)
                 elif is_winning:
-                    pass # Chờ Win không cho bấm
+                    pass
                 else:
                     btn_options.check_hover(mouse_pos)
                     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -148,9 +183,6 @@ def main():
                     if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                         is_paused = True
 
-        # ==========================================
-        # 2. KIỂM TRA ĐIỀU KIỆN THẮNG & AI
-        # ==========================================
         if current_state == STATE_GAME_PLAY and game_board:
             if ai_solving and not show_win and not is_paused:
                 current_time = pygame.time.get_ticks()
@@ -171,18 +203,34 @@ def main():
                     win_timer = pygame.time.get_ticks() 
                     earned = random.randint(1000, 1500)
                     player_coins += earned
-                    win_popup.earned_coins = earned # Gửi số tiền sang bảng Win để khoe
+                    win_popup.earned_coins = earned 
+                    
+                    # --- LOGIC NHIỆM VỤ ĐÃ ĐƯỢC GỘP XỊN XÒ VÀO ĐÂY ---
+                    for quest in quests:
+                        if quest["id"] == "win_1_level" and not quest["completed"]:
+                            quest["progress"] += 1
+                            if quest["progress"] >= quest["goal"]:
+                                quest["completed"] = True
+                                player_coins += quest["reward"]["coins"]
+                                print(f"Hoàn thành nhiệm vụ: {quest['title']} - Nhận {quest['reward']['coins']} xu!")
+
+                    for quest in quests:
+                        if quest["id"] == "collect_5000_coins" and not quest["completed"]:
+                            if player_coins >= quest["goal"]:
+                                quest["completed"] = True
+                                player_coins += quest["reward"]["coins"]
+                                print(f"Hoàn thành nhiệm vụ: {quest['title']} - Nhận {quest['reward']['coins']} xu!")
+                    
+                    save_quests(quests)
                     save_progress(unlocked_levels, player_coins, player_name, redeemed_codes)
                     
+            # Hiệu ứng trễ 2 giây trước khi hiện bảng Win
             if is_winning:
                 current_time = pygame.time.get_ticks()
                 if current_time - win_timer >= 2000:
                     show_win = True    
                     is_winning = False 
 
-        # ==========================================
-        # 3. XỬ LÝ LOGIC CHUYỂN CẢNH
-        # ==========================================
         if current_state == STATE_MENU_NAME and start_screen.next_state == STATE_DASHBOARD:
             player_name = start_screen.player_name
             current_state = STATE_DASHBOARD
@@ -228,7 +276,6 @@ def main():
                     win_popup.action = None
 
                 elif win_popup.action == "NEXT":
-                    # Mở khóa màn mới
                     if level_select_screen.selected_level == unlocked_levels and unlocked_levels < MAX_LEVELS:
                         unlocked_levels += 1
                         save_progress(unlocked_levels, player_coins, player_name, redeemed_codes)  
@@ -260,9 +307,19 @@ def main():
                     ai_solving = False 
                     pause_menu.action = None
                 elif pause_menu.action == "AI_SOLVE":
-                    ai_solving = True                    
-                    is_paused = False
-                    pause_menu.action = None
+                    # --- ĐÃ KHÔI PHỤC LOGIC TRỪ 100 COIN ---
+                    if player_coins >= 100:
+                        player_coins -= 100
+                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes)
+                        ai_solving = True                    
+                        is_paused = False
+                        pause_menu.action = None
+                    else:
+                        try:
+                            pause_menu.error_msg = "KHÔNG ĐỦ 100 COIN!"
+                            pause_menu.error_alpha = 255
+                        except: pass
+                        pause_menu.action = None
                 elif pause_menu.action == "EXIT":
                     current_state = STATE_LEVEL_SELECT
                     is_paused = False
@@ -270,15 +327,12 @@ def main():
                     ai_solving = False 
                     pause_menu.action = None
 
-        # ==========================================
-        # 4. VẼ TẤT CẢ LÊN MÀN HÌNH
-        # ==========================================
         if current_state == STATE_MENU_NAME: start_screen.draw(screen)
         elif current_state == STATE_DASHBOARD: dashboard_screen.draw(screen, player_name, player_coins)
         elif current_state == STATE_LEVEL_SELECT:
             if game_bg: screen.blit(game_bg, (0, 0))
             else: screen.fill(BG_COLOR)
-            level_select_screen.draw(screen) # ĐÃ THÊM BIẾN VÀO ĐÂY
+            level_select_screen.draw(screen)
         elif current_state == STATE_SHOP: shop_screen.draw(screen)
         elif current_state == STATE_QUESTS: quests_screen.draw(screen)
         elif current_state == STATE_SKIN: skin_screen.draw(screen)
