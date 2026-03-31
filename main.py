@@ -19,6 +19,9 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 SAVE_FILE = "save_data.json"
 
+# =================================================================
+# AI TÌM ĐÁ TỐI ƯU (Của Sếp)
+# =================================================================
 def find_optimal_rock_to_break(board):
     rows, cols = board.rows, board.cols
     distances = { (r, c): float('inf') for r in range(rows) for c in range(cols) }
@@ -66,41 +69,95 @@ def find_optimal_rock_to_break(board):
             return board.grid[r][c]
     return None
 
+# =================================================================
+# HỆ THỐNG NHIỆM VỤ MỚI (Của nhánh UI3)
+# =================================================================
+def build_default_quest_data(current_unlocked=1):
+    quest_stats = QUEST_STAT_DEFAULTS.copy()
+    quest_stats["highest_unlocked_level"] = max(1, int(current_unlocked))
+    return {"stats": quest_stats, "claimed": []}
+
+def normalize_quest_data(quest_data, current_unlocked=1):
+    if not isinstance(quest_data, dict):
+        return build_default_quest_data(current_unlocked)
+
+    stats = quest_data.get("stats", {})
+    if not isinstance(stats, dict):
+        stats = {}
+
+    fixed_stats = QUEST_STAT_DEFAULTS.copy()
+    for key in fixed_stats:
+        try:
+            fixed_stats[key] = int(stats.get(key, fixed_stats[key]))
+        except (TypeError, ValueError):
+            pass
+
+    fixed_stats["highest_unlocked_level"] = max(
+        fixed_stats["highest_unlocked_level"], int(current_unlocked)
+    )
+
+    claimed = quest_data.get("claimed", [])
+    if not isinstance(claimed, list):
+        claimed = []
+
+    valid_ids = {quest["id"] for quest in QUEST_DEFINITIONS}
+    claimed = [qid for qid in claimed if qid in valid_ids]
+
+    return {"stats": fixed_stats, "claimed": claimed}
+
+def get_quest_by_id(quest_id):
+    for quest in QUEST_DEFINITIONS:
+        if quest["id"] == quest_id:
+            return quest
+    return None
+
+def is_quest_completed(quest_data, quest):
+    metric = quest["metric"]
+    progress = int(quest_data["stats"].get(metric, 0))
+    return progress >= int(quest["target"])
+
+def claim_quest_reward(quest_data, quest_id):
+    if quest_id in quest_data["claimed"]:
+        return 0
+    quest = get_quest_by_id(quest_id)
+    if not quest:
+        return 0
+    if not is_quest_completed(quest_data, quest):
+        return 0
+    quest_data["claimed"].append(quest_id)
+    return int(quest["reward"])
+
+# =================================================================
+# DUNG HỢP FILE LƯU TRỮ (Gộp Cuốc và Nhiệm vụ)
+# =================================================================
 def load_progress():
     if os.path.exists(SAVE_FILE):
         try:
             with open(SAVE_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data.get('unlocked_levels', 1), data.get('coins', 100), data.get('player_name', ""), data.get('redeemed_codes', []), data.get('pickaxes', 3) 
+                unlocked_levels = data.get('unlocked_levels', 1)
+                coins = data.get('coins', 100)
+                player_name = data.get('player_name', "")
+                redeemed_codes = data.get('redeemed_codes', [])
+                pickaxes = data.get('pickaxes', 3) # Của Sếp
+                quest_data = normalize_quest_data(data.get('quest_data', {}), unlocked_levels) # Của UI3
+                return unlocked_levels, coins, player_name, redeemed_codes, pickaxes, quest_data
         except: pass
-    return 1, 100, "", [], 3
+    return 1, 100, "", [], 3, build_default_quest_data(1)
 
-def save_progress(level, coins, name, redeemed_codes, pickaxes):
-    data = {'unlocked_levels': level, 'coins': coins, 'player_name': name, 'redeemed_codes': redeemed_codes, 'pickaxes': pickaxes}
-    with open(SAVE_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False)
+def save_progress(level, coins, name, redeemed_codes, pickaxes, quest_data):
+    data = {
+        'unlocked_levels': level,
+        'coins': coins,
+        'player_name': name,
+        'redeemed_codes': redeemed_codes,
+        'pickaxes': pickaxes, # Của Sếp
+        'quest_data': normalize_quest_data(quest_data, level) # Của UI3
+    }
+    with open(SAVE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False)
 
-quests_data_template = [
-    {"id": "win_1_level", "title": "Thắng 1 màn", "description": "Hoàn thành 1 màn", "goal": 1, "progress": 0, "reward": {"coins": 500}, "completed": False},
-    {"id": "collect_5000_coins", "title": "Thu thập 5000 xu", "description": "Tích lũy 5000 xu", "goal": 5000, "progress": 0, "reward": {"coins": 1000}, "completed": False}
-]
-
-def load_quests():
-    if os.path.exists(SAVE_FILE):
-        try:
-            with open(SAVE_FILE, 'r', encoding='utf-8') as f: data = json.load(f)
-            return data.get("quests", [q.copy() for q in quests_data_template])
-        except: pass
-    return [q.copy() for q in quests_data_template]
-
-def save_quests(quests):
-    try:
-        with open(SAVE_FILE, 'r', encoding='utf-8') as f: data = json.load(f)
-    except: data = {}
-    data["quests"] = quests
-    with open(SAVE_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False)
-
-unlocked_levels, global_coins, global_name, redeemed_codes, global_pickaxes = load_progress()
-quests = load_quests()
+unlocked_levels, global_coins, global_name, redeemed_codes, global_pickaxes, global_quest_data = load_progress()
 MAX_LEVELS = 60
 
 def main():
@@ -132,7 +189,7 @@ def main():
     dashboard_screen = DashboardScreen()
     level_select_screen = LevelSelectScreen()
     shop_screen = ShopScreen()
-    quests_screen = QuestsScreen(quests) 
+    quests_screen = QuestsScreen() # Đã gọi UI mới của bạn Sếp
     pause_menu = PauseMenu()
     tutorial_popup = TutorialPopup()
     win_popup = WinPopup()
@@ -151,6 +208,7 @@ def main():
     
     game_board = None; player_coins = global_coins; player_pickaxes = global_pickaxes
     player_name = ""; current_state = STATE_MENU_NAME
+    quest_data = normalize_quest_data(global_quest_data, unlocked_levels)
     
     game_notif = ""; game_notif_alpha = 0
     
@@ -188,11 +246,12 @@ def main():
                 if action == "UNLOCK_ALL":
                     unlocked_levels = MAX_LEVELS
                     if "UNPIPE" not in redeemed_codes: redeemed_codes.append("UNPIPE")
-                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes) 
+                    quest_data["stats"]["highest_unlocked_level"] = max(quest_data["stats"]["highest_unlocked_level"], unlocked_levels)
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                 elif action == "ADD_COINS":
                     player_coins += 10000 
                     if "PIPEGOLD" not in redeemed_codes: redeemed_codes.append("PIPEGOLD")
-                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                     if sound_coin:
                         try: sound_coin.set_volume(dashboard_screen.sfx_vol)
                         except: pass
@@ -200,44 +259,44 @@ def main():
                     
             elif current_state == STATE_LEVEL_SELECT: level_select_screen.handle_event(event, unlocked_levels)
             elif current_state == STATE_SHOP: 
-                # Nhận action_id từ Shop (ví dụ: BUY_ACT_2)
                 action = shop_screen.handle_event(event, player_coins, player_pickaxes, unlocked_levels)
-                
                 if action == "BUY_PICKAXE_1":
                     player_coins -= 100; player_pickaxes += 1
-                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                     if sound_coin:
                         try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
                         except: pass
-                        
                 elif action == "BUY_PICKAXE_3":
                     player_coins -= 250; player_pickaxes = 3
-                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                     if sound_coin:
                         try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
                         except: pass
-                        
-                # --- XỬ LÝ MUACHAPTER LẺ (ACTS 2-5) ---
                 elif action and action.startswith("BUY_ACT_"):
-                    # Lấy số Act từ ID (ví dụ: BUY_ACT_2 -> 2)
                     act_num = int(action.split('_')[-1])
-                    
-                    # Mua act nào mở màn đầu tiên của act đó
-                    # Ví dụ: Mua Act 2 mở màn 13
                     act_start_level = (act_num - 1) * 12 + 1
-                    
                     if player_coins >= 1500 and unlocked_levels < act_start_level:
                         player_coins -= 1500
-                        unlocked_levels = act_start_level # Chỉ mở tới màn đầu của Act vừa mua
-                        
-                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
-                        
-                        # Phát tiếng win chúc mừng mua đồ xịn
+                        unlocked_levels = act_start_level 
+                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                         if sound_win:
                             try: sound_win.set_volume(dashboard_screen.sfx_vol); sound_win.play()
                             except: pass
 
-            elif current_state == STATE_QUESTS: quests_screen.handle_event(event)
+            elif current_state == STATE_QUESTS:
+                quests_action = quests_screen.handle_event(event, quest_data)
+                if quests_action and quests_action[0] == "CLAIM_QUEST":
+                    reward = claim_quest_reward(quest_data, quests_action[1])
+                    if reward > 0:
+                        player_coins += reward
+                        try: quests_screen.add_notification(f"+{reward} COIN", (255, 215, 0))
+                        except: pass
+                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
+                        if sound_coin:
+                            try: sound_coin.set_volume(dashboard_screen.sfx_vol)
+                            except: pass
+                            sound_coin.play()
+
             elif current_state == STATE_SKIN: skin_screen.handle_event(event)
 
             elif current_state == STATE_GAME_PLAY:
@@ -256,7 +315,7 @@ def main():
                         elif btn_buy_pickaxe.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
                             if player_coins >= 100 and player_pickaxes < 3:
                                 player_coins -= 100; player_pickaxes += 1
-                                save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                                save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                                 if ai_paused_for_pickaxe:
                                     ai_solving = True; ai_paused_for_pickaxe = False
                             else:
@@ -270,7 +329,7 @@ def main():
                                     if hasattr(game_board, 'break_rock'):
                                         if game_board.break_rock(mouse_pos[0], mouse_pos[1]):
                                             player_pickaxes -= 1 
-                                            save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                                            save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                                     is_pickaxe_active = False 
                                     ai_solving = False; ai_paused_for_pickaxe = False
                                 else:
@@ -291,7 +350,7 @@ def main():
                     ai_target_rock.is_rock = False 
                     player_pickaxes -= 1
                     game_board.update_connectivity()
-                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                     ai_timer = pygame.time.get_ticks() 
                     ai_animating_pickaxe = False 
                 else:
@@ -371,6 +430,9 @@ def main():
                     is_winning = True; win_timer = pygame.time.get_ticks() 
                     earned = random.randint(1000, 1500); player_coins += earned
                     
+                    quest_data["stats"]["levels_completed"] += 1
+                    quest_data["stats"]["total_coins_earned"] += earned
+
                     if sound_coin:
                         try: sound_coin.set_volume(dashboard_screen.sfx_vol)
                         except: pass
@@ -381,22 +443,12 @@ def main():
                         sound_win.play()
                         
                     win_popup.earned_coins = earned 
-                    for quest in quests:
-                        if quest["id"] == "win_1_level" and not quest["completed"]:
-                            quest["progress"] += 1
-                            if quest["progress"] >= quest["goal"]: quest["completed"] = True
-                        if quest["id"] == "collect_5000_coins" and not quest["completed"]:
-                            if player_coins >= quest["goal"]:
-                                quest["completed"] = True; player_coins += quest["reward"]["coins"]
                     
-                    # =================================================================
-                    # FIX LOGIC: MỞ KHÓA MÀN MỚI NGAY KHI VỪA THẮNG GAME TẠI ĐÂY!
-                    # =================================================================
                     if level_select_screen.selected_level == unlocked_levels and unlocked_levels < MAX_LEVELS:
                         unlocked_levels += 1
+                        quest_data["stats"]["highest_unlocked_level"] = max(quest_data["stats"]["highest_unlocked_level"], unlocked_levels)
                     
-                    save_quests(quests)
-                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                     
             if is_winning:
                 current_time = pygame.time.get_ticks()
@@ -405,7 +457,7 @@ def main():
         if current_state == STATE_MENU_NAME and start_screen.next_state == STATE_DASHBOARD:
             player_name = start_screen.player_name; current_state = STATE_DASHBOARD
             start_screen.next_state = STATE_MENU_NAME 
-            save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+            save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
         elif current_state == STATE_DASHBOARD and dashboard_screen.next_state is not None:
             current_state = dashboard_screen.next_state; dashboard_screen.next_state = None 
         elif current_state == STATE_LEVEL_SELECT:
@@ -426,12 +478,12 @@ def main():
                     current_state = STATE_LEVEL_SELECT; show_win = False; is_winning = False; ai_solving = False; win_popup.action = None
                     ai_animating_pickaxe = False
                 elif win_popup.action == "NEXT":
-                    # MÀN ĐÃ MỞ TỪ TRƯỚC, BẤM NEXT CHỈ VIỆC CHUYỂN BẢN ĐỒ
                     level_select_screen.selected_level = (level_select_screen.selected_level % MAX_LEVELS) + 1
                     game_board = Board(level_id=level_select_screen.selected_level)
                     show_win = False; is_winning = False; ai_solving = False; is_pickaxe_active = False; show_tutorial = True; win_popup.action = None
                     ai_paid_this_level = False; ai_paused_for_pickaxe = False; ai_animating_pickaxe = False
                 elif win_popup.action == "REPLAY": 
+                    quest_data["stats"]["replays_used"] += 1
                     game_board = Board(level_id=level_select_screen.selected_level)
                     show_win = False; is_winning = False; ai_solving = False; is_pickaxe_active = False; win_popup.action = None
                     ai_paid_this_level = False; ai_paused_for_pickaxe = False; ai_animating_pickaxe = False
@@ -446,7 +498,8 @@ def main():
                     else:
                         if player_coins >= 100: 
                             player_coins -= 100; ai_paid_this_level = True
-                            save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes)
+                            quest_data["stats"]["ai_solves_used"] += 1
+                            save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                             ai_solving = True; is_paused = False; ai_paused_for_pickaxe = False; pause_menu.action = None
                         else:
                             try: pause_menu.error_msg = "KHÔNG ĐỦ 100 COIN!"; pause_menu.error_alpha = 255
@@ -464,7 +517,7 @@ def main():
             else: screen.fill(BG_COLOR)
             level_select_screen.draw(screen)
         elif current_state == STATE_SHOP: shop_screen.draw(screen, player_coins, player_pickaxes)
-        elif current_state == STATE_QUESTS: quests_screen.draw(screen)
+        elif current_state == STATE_QUESTS: quests_screen.draw(screen, quest_data)
         elif current_state == STATE_SKIN: skin_screen.draw(screen)
         elif current_state == STATE_GAME_PLAY and game_board:
             if game_bg: screen.blit(game_bg, (0, 0))

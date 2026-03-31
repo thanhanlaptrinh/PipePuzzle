@@ -77,8 +77,6 @@ class ShopItemCard:
         self.price = price
         self.action_id = action_id
         
-        # --- FIX KÍCH THƯỚC HÌNH ẢNH ---
-        # Ép cứng kích thước 120x120 để nó không bị bự chà bá lửa đè lên chữ
         try:
             raw_img = pygame.image.load(img_path).convert_alpha()
             img_size = min(120, w - 40, h - 140)
@@ -109,7 +107,6 @@ class ShopItemCard:
         txt_desc = self.font_desc.render(self.desc, True, COLOR_TEXT_DESC)
         surface.blit(txt_desc, (self.rect.x + 20, self.rect.y + 45))
         
-        # --- FIX VỊ TRÍ HÌNH ẢNH: Đặt vào tâm giữa ô mô tả và nút mua ---
         if self.img:
             img_rect = self.img.get_rect(center=(self.rect.centerx, self.rect.y + 135))
             surface.blit(self.img, img_rect)
@@ -120,7 +117,7 @@ class ShopItemCard:
 class ShopScreen:
     def __init__(self):
         self.next_state = None
-        self.font_title = pygame.font.SysFont('tahoma', 70, bold=True) # Phóng to tên SHOP
+        self.font_title = pygame.font.SysFont('tahoma', 70, bold=True)
         self.font_menu = pygame.font.SysFont('tahoma', 32, bold=True)
 
         try:
@@ -258,21 +255,17 @@ class ShopScreen:
         if self.bg: screen.blit(self.bg, (0, 0))
         else: screen.fill(COLOR_BG_DARK)
         
-        # --- ĐÃ SỬA THÀNH CHỮ "SHOP" VÀ CANH GIỮA LẠI ---
         self.draw_text_outline(screen, "SHOP", self.font_title, (255, 255, 255), (0, 0, 0), (WINDOW_WIDTH//2 - 60, 50))
         
-        # --- FIX Ô CHỨA XU THÀNH MÀU TRẮNG, CANH LỀ CHUẨN MỰC ---
         font_info = pygame.font.SysFont("tahoma", 26, bold=True)
         box_xu_rect = pygame.Rect(WINDOW_WIDTH - 250, 25, 220, 50)
-        pygame.draw.rect(screen, (255, 255, 255), box_xu_rect, border_radius=10) # Nền trắng
-        pygame.draw.rect(screen, (200, 200, 200), box_xu_rect, 2, border_radius=10) # Viền bạc
+        pygame.draw.rect(screen, (255, 255, 255), box_xu_rect, border_radius=10) 
+        pygame.draw.rect(screen, (200, 200, 200), box_xu_rect, 2, border_radius=10) 
         
         if self.img_coin: 
             screen.blit(self.img_coin, (box_xu_rect.x + 10, box_xu_rect.y + 10))
             
-        # Chữ xu nằm gọn bên trong ô trắng
         self.draw_text_outline(screen, f": {coins} XU", font_info, (241, 196, 15), (0,0,0), (box_xu_rect.x + 45, box_xu_rect.y + 10), "left")
-        
         self.btn_back.draw(screen)
 
         pygame.draw.rect(screen, COLOR_PANEL, self.menu_rect)
@@ -293,18 +286,14 @@ class ShopScreen:
         self.content_surface = pygame.Surface((self.content_rect.w, self.total_content_height), pygame.SRCALPHA)
         font_header = pygame.font.SysFont('tahoma', 24, bold=True)
 
-        # --- FIX ĐƯỜNG GẠCH NGANG: Dời tọa độ Y xuống DƯỚI dòng text ---
-        # Header Items
         txt_h_items = font_header.render("VẬT PHẨM ĐÁNH ĐÁ", True, COLOR_GLOW_YELLOW)
         self.content_surface.blit(txt_h_items, (40, self.y_items))
         pygame.draw.line(self.content_surface, COLOR_GLOW_BLUE, (30, self.y_items + 35), (self.content_rect.w - 50, self.y_items + 35), 2)
 
-        # Header Skins
         txt_h_skins = font_header.render("SKINS ỐNG NƯỚC (Sắp ra mắt)", True, (150, 150, 150))
         self.content_surface.blit(txt_h_skins, (40, self.y_skins))
         pygame.draw.line(self.content_surface, COLOR_GLOW_BLUE, (30, self.y_skins + 35), (self.content_rect.w - 50, self.y_skins + 35), 2)
 
-        # Header Acts
         txt_h_acts = font_header.render("MỞ KHÓA MÀN CHƠI (CHAPTERS)", True, (155, 89, 182))
         self.content_surface.blit(txt_h_acts, (40, self.y_acts))
         pygame.draw.line(self.content_surface, (155, 89, 182), (30, self.y_acts + 35), (self.content_rect.w - 50, self.y_acts + 35), 2)
@@ -329,9 +318,6 @@ class ShopScreen:
             self.notif_alpha -= 3
 
 
-# =======================================================
-# GIỮ NGUYÊN CÁC MÀN HÌNH CÒN LẠI Y CHANG BẢN CŨ
-# =======================================================
 class StartScreen:
     def __init__(self):
         self.font_title = pygame.font.SysFont('tahoma', 70, bold=True)
@@ -822,7 +808,7 @@ class SkinScreen:
     def __init__(self):
         self.next_state = None
         self.font = pygame.font.SysFont('tahoma', 40, bold=True)
-        self.btn_back = Button(20, 20, 150, 50, "< DASHBOARD", (100, 100, 100))
+        self.btn_back = Button(20, 20, 150, 50, "< MENU", (0, 0, 0, 0), (255, 255, 255))
 
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos()
@@ -845,18 +831,78 @@ class SkinScreen:
         self.draw_text_outline(screen, "CHỌN SKIN (Đang phát triển)", self.font, COLOR_GLOW_YELLOW, (0, 0, 0), (WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
         self.btn_back.draw(screen)
 
+# =======================================================
+# MÀN HÌNH NHIỆM VỤ MỚI (Của nhánh UI3)
+# =======================================================
 class QuestsScreen:
     def __init__(self, quests=None):
         self.quests = quests or []
         self.next_state = None
-        self.font = pygame.font.SysFont('tahoma', 40, bold=True)
-        self.btn_back = Button(20, 20, 150, 50, "< DASHBOARD", (100, 100, 100))
+        self.font = pygame.font.SysFont('tahoma', 44, bold=True)
+        self.font_card_title = pygame.font.SysFont('tahoma', 24, bold=True)
+        self.font_card_desc = pygame.font.SysFont('tahoma', 19, bold=True)
+        self.font_small = pygame.font.SysFont('tahoma', 17, bold=True)
+        self.btn_back = Button(20, 20, 140, 50, "< MENU", (0, 0, 0, 0), (255, 255, 255))
+        self.quest_buttons = {}
+        self.notifications = []
 
-    def handle_event(self, event):
+        card_x = 50
+        card_y = 95
+        card_h = 82
+        gap = 8
+        
+        # Đảm bảo QUEST_DEFINITIONS đã được khai báo trong settings.py
+        for i, quest in enumerate(QUEST_DEFINITIONS):
+            y = card_y + i * (card_h + gap)
+            btn = Button(card_x + 715, y + 20, 180, 40, "NHẬN", (46, 204, 113))
+            btn.font = pygame.font.SysFont('tahoma', 24, bold=True)
+            self.quest_buttons[quest["id"]] = btn
+
+    def add_notification(self, text, color=(255, 215, 0)):
+        self.notifications.append(
+            {
+                "text": text,
+                "x": WINDOW_WIDTH // 2,
+                "y": WINDOW_HEIGHT - 40,
+                "alpha": 255,
+                "color": color,
+            }
+        )
+
+    def _quest_progress(self, quest_data, quest):
+        stats = quest_data.get("stats", {})
+        return int(stats.get(quest["metric"], 0))
+
+    def _is_claimed(self, quest_data, quest_id):
+        return quest_id in quest_data.get("claimed", [])
+
+    def _is_completed(self, quest_data, quest):
+        return self._quest_progress(quest_data, quest) >= int(quest["target"])
+
+    def handle_event(self, event, quest_data):
         mouse_pos = pygame.mouse.get_pos()
         self.btn_back.check_hover(mouse_pos)
-        if event.type == pygame.MOUSEBUTTONDOWN and self.btn_back.is_clicked(mouse_pos, pygame.mouse.get_pressed()): 
+        
+        for quest in QUEST_DEFINITIONS:
+            btn = self.quest_buttons[quest["id"]]
+            btn.check_hover(mouse_pos)
+
+        if event.type == pygame.MOUSEBUTTONDOWN and self.btn_back.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
             self.next_state = STATE_DASHBOARD
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            pressed = pygame.mouse.get_pressed()
+            for quest in QUEST_DEFINITIONS:
+                quest_id = quest["id"]
+                btn = self.quest_buttons[quest_id]
+                if self._is_claimed(quest_data, quest_id):
+                    continue
+                if not self._is_completed(quest_data, quest):
+                    continue
+                if btn.is_clicked(mouse_pos, pressed):
+                    return ("CLAIM_QUEST", quest_id)
+
+        return None
 
     def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
         outline_width = 2
@@ -868,7 +914,78 @@ class QuestsScreen:
         txt_surface = font.render(text, True, text_color)
         screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
 
-    def draw(self, screen): 
+    def draw(self, screen, quest_data):
         screen.fill(COLOR_BG_DARK)
-        self.draw_text_outline(screen, "NHIỆM VỤ (Đang phát triển)", self.font, COLOR_GLOW_BLUE, (0, 0, 0), (WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
+        self.draw_text_outline(screen, "NHIỆM VỤ", self.font, (0, 255, 255), (0, 0, 0), (WINDOW_WIDTH//2, 52))
+
+        card_x = 50
+        card_y = 95
+        card_w = 900
+        card_h = 82
+        gap = 8
+
+        for i, quest in enumerate(QUEST_DEFINITIONS):
+            y = card_y + i * (card_h + gap)
+            progress = self._quest_progress(quest_data, quest)
+            target = int(quest["target"])
+            clamped = min(progress, target)
+            completed = progress >= target
+            claimed = self._is_claimed(quest_data, quest["id"])
+
+            bg = (40, 45, 57) if not completed else (34, 72, 53)
+            border = (115, 127, 159) if not completed else (46, 204, 113)
+            pygame.draw.rect(screen, bg, (card_x, y, card_w, card_h), border_radius=12)
+            pygame.draw.rect(screen, border, (card_x, y, card_w, card_h), 2, border_radius=12)
+
+            title_surface = self.font_card_title.render(quest["title"], True, (255, 255, 255))
+            title_shadow = self.font_card_title.render(quest["title"], True, (0, 0, 0))
+            screen.blit(title_shadow, (card_x + 22 + 2, y + 12 + 2))
+            screen.blit(title_surface, (card_x + 22, y + 12))
+
+            desc_text = f"{quest['desc']}  |  THƯỞNG: +{quest['reward']} coin"
+            desc_surface = self.font_card_desc.render(desc_text, True, (222, 224, 230))
+            desc_shadow = self.font_card_desc.render(desc_text, True, (0, 0, 0))
+            screen.blit(desc_shadow, (card_x + 22 + 2, y + 40 + 2))
+            screen.blit(desc_surface, (card_x + 22, y + 40))
+
+            bar_x, bar_y, bar_w, bar_h = card_x + 22, y + 63, 430, 10
+            pygame.draw.rect(screen, (18, 20, 25), (bar_x, bar_y, bar_w, bar_h), border_radius=6)
+            fill_w = int(bar_w * (clamped / target)) if target > 0 else 0
+            if fill_w > 0:
+                pygame.draw.rect(screen, (75, 166, 235), (bar_x, bar_y, fill_w, bar_h), border_radius=6)
+            pygame.draw.rect(screen, (190, 196, 210), (bar_x, bar_y, bar_w, bar_h), 1, border_radius=6)
+
+            progress_text = f"Tiến độ: {clamped}/{target}"
+            progress_surface = self.font_small.render(progress_text, True, (245, 245, 245))
+            progress_shadow = self.font_small.render(progress_text, True, (0, 0, 0))
+            progress_x = bar_x + bar_w + 38
+            progress_y = y + 57
+            screen.blit(progress_shadow, (progress_x + 2, progress_y + 2))
+            screen.blit(progress_surface, (progress_x, progress_y))
+
+            btn = self.quest_buttons[quest["id"]]
+            btn.rect.x = card_x + 715
+            btn.rect.y = y + 20
+            if claimed:
+                btn.text = "ĐÃ NHẬN"
+                btn.bg_color = (110, 110, 110)
+                btn.is_enabled = False
+            elif completed:
+                btn.text = "NHẬN"
+                btn.bg_color = (46, 204, 113)
+                btn.is_enabled = True
+            else:
+                btn.text = "CHƯA XONG"
+                btn.bg_color = (130, 130, 130)
+                btn.is_enabled = False
+            btn.draw(screen)
+
+        font_notif = pygame.font.SysFont("tahoma", 30, bold=True)
+        for notif in self.notifications[:]:
+            self.draw_text_outline(screen, notif["text"], font_notif, notif["color"], (0, 0, 0), (notif["x"], notif["y"]))
+            notif["y"] -= 1
+            notif["alpha"] -= 4
+            if notif["alpha"] <= 0:
+                self.notifications.remove(notif)
+
         self.btn_back.draw(screen)
