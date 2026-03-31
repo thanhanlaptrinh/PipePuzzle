@@ -275,9 +275,15 @@ def main():
                 elif action and action.startswith("BUY_ACT_"):
                     act_num = int(action.split('_')[-1])
                     act_start_level = (act_num - 1) * 12 + 1
-                    if player_coins >= 1500 and unlocked_levels < act_start_level:
+                    required_level = (act_num - 2) * 12 + 1 # Cấp độ yêu cầu của Act trước
+                    
+                    if player_coins >= 1500 and unlocked_levels < act_start_level and unlocked_levels >= required_level:
                         player_coins -= 1500
                         unlocked_levels = act_start_level 
+                        
+                        # Đồng bộ luôn nhiệm vụ "Phá đảo Act" cho chắc
+                        quest_data["stats"]["highest_unlocked_level"] = max(quest_data["stats"]["highest_unlocked_level"], unlocked_levels)
+                        
                         save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                         if sound_win:
                             try: sound_win.set_volume(dashboard_screen.sfx_vol); sound_win.play()

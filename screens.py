@@ -228,9 +228,17 @@ class ShopScreen:
                     elif item.action_id.startswith("BUY_ACT_") and act_num_str.isdigit():
                         act_num = int(act_num_str)
                         act_start_lvl = (act_num - 1) * 12 + 1
-                        if unlocked_levels >= act_start_lvl: self.show_notif(f"BẠN ĐÃ CÓ CHAPTER {act_num} RỒI!", COLOR_GLOW_YELLOW)
-                        elif coins >= 1500: self.show_notif(f"MUA CHAPTER {act_num} THÀNH CÔNG!", COLOR_GLOW_BLUE); return item.action_id
-                        else: self.show_notif(f"KHÔNG ĐỦ 1500 XU ĐỂ MUA ACT {act_num}!", (231, 76, 60))
+                        required_lvl = (act_num - 2) * 12 + 1 # Phải có Act trước đó
+                        
+                        if unlocked_levels >= act_start_lvl: 
+                            self.show_notif(f"BẠN ĐÃ CÓ CHAPTER {act_num} RỒI!", COLOR_GLOW_YELLOW)
+                        elif unlocked_levels < required_lvl:
+                            self.show_notif(f"PHẢI MỞ KHÓA ACT {act_num - 1} TRƯỚC!", (231, 76, 60))
+                        elif coins >= 1500: 
+                            self.show_notif(f"MUA CHAPTER {act_num} THÀNH CÔNG!", COLOR_GLOW_BLUE)
+                            return item.action_id
+                        else: 
+                            self.show_notif(f"KHÔNG ĐỦ 1500 XU ĐỂ MUA ACT {act_num}!", (231, 76, 60))
         
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.btn_back.is_clicked(mouse_pos, mouse_pressed): self.next_state = STATE_DASHBOARD
