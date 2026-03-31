@@ -12,12 +12,21 @@ TILE_SIZE = 50
 BG_COLOR = (30, 30, 30)
 GRID_COLOR = (100, 100, 100)
 PIPE_COLOR_OFF = (60, 60, 60)
-PIPE_COLOR_ON = (0, 255, 255) # Xanh Neon
+PIPE_COLOR_ON = (0, 255, 255)
 TEXT_COLOR = (255, 255, 255)
 HIGHLIGHT_COLOR = (255, 255, 0)
 INPUT_BOX_COLOR = (50, 50, 50)
 BG_START_PATH = "assets/images/game_bg.png"
 BG_GAME_PATH = "assets/images/game_bg.png"
+IMG_MONEY_PATH = "assets/money_chip.png"
+
+BG_ACT1_PATH = "assets/images/bg_act1.jpg"
+BG_ACT2_PATH = "assets/images/bg_act2.jpg"
+
+ACT_BG_PATHS = [
+    BG_ACT1_PATH,
+    BG_ACT2_PATH
+]
 
 # Các trạng thái luồng game
 STATE_MENU_NAME = 0
