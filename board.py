@@ -5,33 +5,47 @@ import random
 from settings import *
 
 class Node:
-    BASE_PIPES = {
-        'I': [True, False, True, False],
-        'L': [True, True, False, False],
-        'T': [True, True, True, False],
-        '+': [True, True, True, True],
-        'E': [True, False, False, False]
+    # 0: Lên, 1: Phải, 2: Xuống, 3: Trái
+    PIPE_TYPES = {
+        'I': [1, 0, 1, 0],
+        'L': [1, 1, 0, 0],
+        'T': [1, 1, 1, 0],
+        '+': [1, 1, 1, 1],
     }
     def __init__(self, row, col, pipe_type):
         self.row = row
         self.col = col
         self.pipe_type = pipe_type
-        self.connections = self.BASE_PIPES[pipe_type].copy()
+        self.base_conns = list(self.PIPE_TYPES.get(pipe_type, [0, 0, 0, 0]))
+        self.conns = list(self.base_conns)
         
-        self.base_connections = self.BASE_PIPES[pipe_type].copy()
         self.angle = 0         
         self.target_angle = 0  
         self.is_powered = False
         self.is_fixed = False 
-        self.is_rock = False # Mặc định không có đá
+        self.is_rock = False # Khai báo cứng luôn, khỏi dùng getattr sau này
 
     def rotate(self):
-        # ---> KHÓA CHẾT: Có đá đè lên hoặc là điểm Đầu/Cuối thì CẤM XOAY <---
-        if self.is_fixed or getattr(self, 'is_rock', False): 
+        # KHÓA CHẾT: Đá hoặc điểm cố định thì cấm xoay
+        if self.is_fixed or self.is_rock or self.pipe_type == '+': 
             return 
-            
-        self.connections = [self.connections[-1]] + self.connections[:-1]
+        self.conns = [self.conns[-1]] + self.conns[:-1]
         self.target_angle -= 90 
+
+    def make_rock(self):
+        """Biến ô này thành đá"""
+        self.is_rock = True
+        self.conns = [0, 0, 0, 0] # Chặn 100% dòng nước đi qua
+
+    def break_rock(self):
+        """Phá đá và khôi phục lại mảng kết nối"""
+        self.is_rock = False
+        # Khôi phục mảng conns dựa trên góc xoay hiện tại đang bị kẹt
+        temp_conns = list(self.base_conns)
+        rotations = (abs(int(self.target_angle)) // 90) % 4
+        for _ in range(rotations):
+            temp_conns = [temp_conns[-1]] + temp_conns[:-1]
+        self.conns = temp_conns
 
 class Board:
     def __init__(self, level_id=1):
@@ -55,11 +69,11 @@ class Board:
         
         if 0 <= row < self.rows and 0 <= col < self.cols:
             node = self.grid[row][col]
-            if getattr(node, 'is_rock', False):
-                node.is_rock = False # Vỡ đá!
+            if node.is_rock:
+                node.break_rock() # Dùng hàm mới
                 self.update_connectivity()
                 return True
-        return False 
+        return False  
     
     def check_win(self):        
         return self.grid[self.rows-1][self.cols-1].is_powered
@@ -117,7 +131,7 @@ class Board:
                 if conn[0] and conn[2]: return 'I'
                 if conn[1] and conn[3]: return 'I'
                 return 'L'
-            return 'E' 
+            return random.choice(['I','L'])
 
         for r in range(self.rows):
             for c in range(self.cols):
@@ -131,18 +145,18 @@ class Board:
                 for _ in range(4):
                     covers_all = True
                     for i in range(4):
-                        if req_conns[r][c][i] and not node.connections[i]: covers_all = False
+                        if req_conns[r][c][i] and not node.conns[i]: covers_all = False
                     if covers_all: break
                     node.rotate()
                 self.grid[r][c] = node
 
         in_node = self.grid[0][0]
-        while not in_node.connections[1]: in_node.rotate() 
+        while not in_node.conns[1]: in_node.rotate() 
         in_node.angle = in_node.target_angle
         in_node.is_fixed = True
         
         out_node = self.grid[self.rows-1][self.cols-1]
-        while not out_node.connections[3]: out_node.rotate() 
+        while not out_node.conns[3]: out_node.rotate() 
         out_node.angle = out_node.target_angle
         out_node.is_fixed = True
         
@@ -153,7 +167,7 @@ class Board:
                     self.grid[r][c].angle = self.grid[r][c].target_angle
 
         # ========================================================
-        # SINH ĐÁ TỰ ĐỘNG (CHỈ TỪ MÀN 2 TRỞ ĐI ĐỂ MÀN 1 CÀY TIỀN)
+        # SINH ĐÁ TỰ ĐỘNG
         # ========================================================
         if self.level_id > 1:
             if self.rows <= 5: num_rocks = random.randint(3, 5) 
@@ -165,8 +179,8 @@ class Board:
             while placed < num_rocks and attempts < 500:
                 rr = random.randint(0, self.rows - 1); cc = random.randint(0, self.cols - 1)
                 node = self.grid[rr][cc]
-                if not getattr(node, 'is_fixed', False) and not getattr(node, 'is_rock', False):
-                    node.is_rock = True
+                if not node.is_fixed and not node.is_rock:
+                    node.make_rock()
                     placed += 1
                 attempts += 1
         random.seed() 
@@ -186,33 +200,30 @@ class Board:
                 self.grid[row][col].is_powered = False
 
         start_node = self.grid[0][0]
-        # ---> CHẶN NƯỚC: Nếu ô nguồn bị đá đè thì tịt luôn <---
-        if getattr(start_node, 'is_rock', False): return
+        if start_node.is_rock: return # Bị đá đè nguồn thì tịt
 
         start_node.is_powered = True
-        queue = [start_node]; visited = set([(0,0)])
+        queue = [start_node]
+        visited = set([(0,0)])
         neighbor_offsets = [(-1, 0), (0, 1), (1, 0), (0, -1)]
-        opposite_direction = {0: 2, 1: 3, 2: 0, 3: 1}
 
         while queue:
             current = queue.pop(0)
-            if getattr(current, 'is_rock', False): continue # Safety check
-            
+
             for direction in range(4):
-                if not current.connections[direction]: continue
+                if current.conns[direction] == 0: continue
+
                 dr, dc = neighbor_offsets[direction]
                 n_row, n_col = current.row + dr, current.col + dc
-                
+
                 if not (0 <= n_row < self.rows and 0 <= n_col < self.cols): continue
                 if (n_row, n_col) in visited: continue
 
                 neighbor = self.grid[n_row][n_col]
-                
-                # ---> CHẶN NƯỚC: Không cho nước chảy vào ô có đá <---
-                if getattr(neighbor, 'is_rock', False): continue
-                
-                opposite_dir = opposite_direction[direction]
-                if neighbor.connections[opposite_dir]:
+                opposite_dir = (direction + 2) % 4
+
+                # Check khớp nối cực nhanh
+                if neighbor.conns[opposite_dir] == 1:
                     neighbor.is_powered = True
                     visited.add((n_row, n_col))
                     queue.append(neighbor)
@@ -246,7 +257,7 @@ class Board:
                 c_water = (0, 230, 255) if node.is_powered else (70, 80, 90) 
                 c_brass = (210, 150, 50)  
                 
-                dirs = node.base_connections
+                dirs = node.base_conns
                 pygame.gfxdraw.aacircle(pipe_surface, center, center, outer_w // 2, c_border)
                 pygame.gfxdraw.filled_circle(pipe_surface, center, center, outer_w // 2, c_border)
                 for i, has_conn in enumerate(dirs):

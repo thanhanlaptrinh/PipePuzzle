@@ -152,7 +152,7 @@ class ShopScreen:
                                            "1 x CÂY CUỐC", "Đập vỡ 1 viên đá cản đường", 100, 
                                            "assets/images/shop_pickaxe_1.png", "BUY_PICKAXE_1"))
         self.shop_items.append(ShopItemCard(start_x + card_w + 30, self.y_items + 50, card_w, card_h, 
-                                           "3 x GÓI CUỐC", "Tiết kiệm 50 xu (Mua khi hết)", 250, 
+                                           "3 x GÓI CUỐC", "Tiết kiệm 50 xu (Cần 3 ô trống)", 250, 
                                            "assets/images/shop_pickaxe_3.png", "BUY_PICKAXE_3"))
 
         self.y_skins = self.y_items + card_h + 100 
@@ -218,11 +218,11 @@ class ShopScreen:
                     act_num_str = item.action_id.split('_')[-1]
                     
                     if item.action_id == "BUY_PICKAXE_1":
-                        if pickaxes >= 3: self.show_notif("TÚI CUỐC ĐÃ ĐẦY (TỐI ĐA 3)!", (231, 76, 60))
+                        if pickaxes >= 9: self.show_notif("TÚI CUỐC ĐÃ ĐẦY (TỐI ĐA 9)!", (231, 76, 60))
                         elif coins >= 100: self.show_notif("MUA THÀNH CÔNG 1 CUỐC!", (46, 204, 113)); return "BUY_PICKAXE_1"
                         else: self.show_notif("KHÔNG ĐỦ XU!", (231, 76, 60))
                     elif item.action_id == "BUY_PICKAXE_3":
-                        if pickaxes > 0: self.show_notif("CHỈ MUA KHI HẾT SẠCH CUỐC!", COLOR_GLOW_YELLOW)
+                        if pickaxes > 6: self.show_notif("TÚI KHÔNG ĐỦ CHỖ CHỨA 3 CUỐC!", COLOR_GLOW_YELLOW)
                         elif coins >= 250: self.show_notif("MUA THÀNH CÔNG 3 CUỐC!", (46, 204, 113)); return "BUY_PICKAXE_3"
                         else: self.show_notif("KHÔNG ĐỦ XU!", (231, 76, 60))
                     elif item.action_id.startswith("BUY_ACT_") and act_num_str.isdigit():
@@ -251,12 +251,18 @@ class ShopScreen:
             for dy in [-outline_width, 0, outline_width]:
                 if dx != 0 or dy != 0:
                     txt_surface = font.render(text, True, outline_color)
-                    if align == "center": rect = txt_surface.get_rect(center=center_pos)
-                    else: rect = txt_surface.get_rect(topleft=center_pos)
+                    # Lỗi cũ là do thiếu cộng dx và dy ở 2 dòng dưới này nè
+                    if align == "center": 
+                        rect = txt_surface.get_rect(center=(center_pos[0] + dx, center_pos[1] + dy))
+                    else: 
+                        rect = txt_surface.get_rect(topleft=(center_pos[0] + dx, center_pos[1] + dy))
                     screen.blit(txt_surface, rect)
+                    
         txt_surface = font.render(text, True, text_color)
-        if align == "center": rect = txt_surface.get_rect(center=center_pos)
-        else: rect = txt_surface.get_rect(topleft=center_pos)
+        if align == "center": 
+            rect = txt_surface.get_rect(center=center_pos)
+        else: 
+            rect = txt_surface.get_rect(topleft=center_pos)
         screen.blit(txt_surface, rect)
 
     def draw(self, screen, coins, pickaxes): 
@@ -273,7 +279,7 @@ class ShopScreen:
         if self.img_coin: 
             screen.blit(self.img_coin, (box_xu_rect.x + 10, box_xu_rect.y + 10))
             
-        self.draw_text_outline(screen, f": {coins} XU", font_info, (241, 196, 15), (0,0,0), (box_xu_rect.x + 45, box_xu_rect.y + 10), "left")
+        self.draw_text_outline(screen, f"{coins} XU", font_info, (241, 196, 15), (0,0,0), (box_xu_rect.x + 125, box_xu_rect.centery), "center")
         self.btn_back.draw(screen)
 
         pygame.draw.rect(screen, COLOR_PANEL, self.menu_rect)
@@ -337,16 +343,31 @@ class StartScreen:
         self.input_rect = pygame.Rect((WINDOW_WIDTH - box_w) // 2, (WINDOW_HEIGHT - box_h) // 2 + 40, box_w, box_h)
         self.btn_start = Button((WINDOW_WIDTH - 200) // 2, self.input_rect.bottom + 50, 200, 60, "BẮT ĐẦU", COLOR_GLOW_BLUE, font_size=32)
         self.cursor_visible = True; self.last_blink = pygame.time.get_ticks()
+        try:
+            raw_bg = pygame.image.load(BG_START_PATH).convert()
+            self.bg = pygame.transform.smoothscale(raw_bg, (WINDOW_WIDTH, WINDOW_HEIGHT))
+        except:
+            self.bg = None
 
-    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos):
-        outline_width = 3 
+    def draw_text_outline(self, screen, text, font, text_color, outline_color, center_pos, align="center"):
+        outline_width = 2
         for dx in [-outline_width, 0, outline_width]:
             for dy in [-outline_width, 0, outline_width]:
-                if (dx != 0 or dy != 0):
+                if dx != 0 or dy != 0:
                     txt_surface = font.render(text, True, outline_color)
-                    screen.blit(txt_surface, txt_surface.get_rect(center=(center_pos[0]+dx, center_pos[1]+dy)))
+                    # SỬA LỖI Ở ĐÂY: Cộng thêm dx và dy vào tọa độ vẽ viền
+                    if align == "center": 
+                        rect = txt_surface.get_rect(center=(center_pos[0] + dx, center_pos[1] + dy))
+                    else: 
+                        rect = txt_surface.get_rect(topleft=(center_pos[0] + dx, center_pos[1] + dy))
+                    screen.blit(txt_surface, rect)
+                    
         txt_surface = font.render(text, True, text_color)
-        screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
+        if align == "center": 
+            rect = txt_surface.get_rect(center=center_pos)
+        else: 
+            rect = txt_surface.get_rect(topleft=center_pos)
+        screen.blit(txt_surface, rect)
 
     def handle_event(self, event):
         mouse_pos = pygame.mouse.get_pos(); self.btn_start.check_hover(mouse_pos)
@@ -368,7 +389,10 @@ class StartScreen:
         return None
 
     def draw(self, screen):
-        screen.fill(COLOR_BG_DARK)
+        if hasattr(self, 'bg') and self.bg:
+            screen.blit(self.bg, (0, 0))
+        else:
+            screen.fill(COLOR_BG_DARK)
         self.draw_text_outline(screen, "PIPE PUZZLE", self.font_title, COLOR_TEXT_MAIN, (0, 0, 0), (WINDOW_WIDTH // 2, 120))
         prompt_y = self.input_rect.top - 60
         self.draw_text_outline(screen, "Nhập tên của bạn:", self.font_prompt, COLOR_TEXT_DESC, (0, 0, 0), (WINDOW_WIDTH // 2, prompt_y))
@@ -431,6 +455,11 @@ class DashboardScreen:
             self.bg_sky = pygame.transform.smoothscale(self.bg_sky, (WINDOW_WIDTH, WINDOW_HEIGHT))
         except: 
             self.bg_sky = None
+
+        try:
+            self.img_coin = pygame.image.load("assets/images/coin_icon.png").convert_alpha()
+            self.img_coin = pygame.transform.smoothscale(self.img_coin, (30, 30))
+        except: self.img_coin = None
 
     def handle_event(self, event, redeemed_codes):
         mouse_pos = pygame.mouse.get_pos()
@@ -541,7 +570,12 @@ class DashboardScreen:
         
         font_info = pygame.font.SysFont("tahoma", 32, bold=True)
         self.draw_text_outline(screen, f"PLAYER: {player_name}", font_info, COLOR_TEXT_MAIN, (0,0,0), (220, 40))
-        self.draw_text_outline(screen, f"COIN: {coins}", font_info, COLOR_GLOW_YELLOW, (0,0,0), (WINDOW_WIDTH - 220, 40))
+        box_xu_rect = pygame.Rect(WINDOW_WIDTH - 250, 25, 220, 50)
+        pygame.draw.rect(screen, (255, 255, 255), box_xu_rect, border_radius=10)
+        pygame.draw.rect(screen, (200, 200, 200), box_xu_rect, 2, border_radius=10)
+        if self.img_coin:
+            screen.blit(self.img_coin, (box_xu_rect.x + 10, box_xu_rect.y + 10))
+        self.draw_text_outline(screen, f"{coins} XU", font_info, (241, 196, 15), (0,0,0), (box_xu_rect.x + 125, box_xu_rect.centery))
         self.draw_text_outline(screen, "PIPE PUZZLE", self.font_title, COLOR_TEXT_MAIN, (0, 0, 0), (WINDOW_WIDTH//2, 120))
         
         self.btn_play.draw(screen)
@@ -758,7 +792,7 @@ class TutorialPopup:
         pygame.draw.rect(screen, COLOR_PANEL, self.popup_rect, border_radius=15)
         pygame.draw.rect(screen, COLOR_GLOW_BLUE, self.popup_rect, 4, border_radius=15)
         self.draw_text_outline(screen, "HƯỚNG DẪN CƠ BẢN", self.font_title, COLOR_GLOW_BLUE, (0, 0, 0), (WINDOW_WIDTH//2, self.popup_rect.top+40), center=True)
-        instructions = ["1. Click chuột TRÁI để xoay ống.", "2. Nối thông nước từ GÓC TRÁI-TRÊN.", "3. Click 'AI GIẢI' trên MENU nếu bị kẹt.", "MỤC TIÊU: Nước chảy đến PHẢI-DƯỚI!"]
+        instructions = ["1. Click chuột TRÁI để xoay ống.", "2. Nối thông nước từ GÓC TRÁI-TRÊN.", "3. Click AI Giải để tự động tìm đường", "MỤC TIÊU: Nước chảy đến PHẢI-DƯỚI!"]
         for i, text in enumerate(instructions): 
             color = COLOR_GLOW_YELLOW if i==3 else COLOR_TEXT_MAIN
             self.draw_text_outline(screen, text, self.font_text, color, (0, 0, 0), (self.popup_rect.left+40, self.popup_rect.top+110+i*45))
@@ -850,6 +884,11 @@ class QuestsScreen:
         self.font_card_title = pygame.font.SysFont('tahoma', 24, bold=True)
         self.font_card_desc = pygame.font.SysFont('tahoma', 19, bold=True)
         self.font_small = pygame.font.SysFont('tahoma', 17, bold=True)
+        try:
+            raw_bg = pygame.image.load(BG_GAME_PATH).convert()
+            self.bg = pygame.transform.smoothscale(raw_bg, (WINDOW_WIDTH, WINDOW_HEIGHT))
+        except:
+            self.bg = None
         self.btn_back = Button(20, 20, 140, 50, "< MENU", (0, 0, 0, 0), (255, 255, 255))
         self.quest_buttons = {}
         self.notifications = []
@@ -923,9 +962,12 @@ class QuestsScreen:
         screen.blit(txt_surface, txt_surface.get_rect(center=center_pos))
 
     def draw(self, screen, quest_data):
-        screen.fill(COLOR_BG_DARK)
+        if hasattr(self, 'bg') and self.bg:
+            screen.blit(self.bg, (0, 0))
+        else:
+            screen.fill(COLOR_BG_DARK)
+            
         self.draw_text_outline(screen, "NHIỆM VỤ", self.font, (0, 255, 255), (0, 0, 0), (WINDOW_WIDTH//2, 52))
-
         card_x = 50
         card_y = 95
         card_w = 900

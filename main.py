@@ -30,7 +30,7 @@ def find_optimal_rock_to_break(board):
     
     for r in range(rows):
         for c in range(cols):
-            if getattr(board.grid[r][c], 'is_powered', False):
+            if board.grid[r][c].is_powered:
                 distances[(r, c)] = 0
                 heapq.heappush(pq, (0, r, c))
                 
@@ -46,8 +46,9 @@ def find_optimal_rock_to_break(board):
         for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             nr, nc = r + dr, c + dc
             if 0 <= nr < rows and 0 <= nc < cols:
-                weight = 1 if getattr(board.grid[nr][nc], 'is_rock', False) else 0
+                weight = 1 if board.grid[nr][nc].is_rock else 0
                 new_cost = cost + weight
+                
                 if new_cost < distances[(nr, nc)]:
                     distances[(nr, nc)] = new_cost
                     came_from[(nr, nc)] = (r, c)
@@ -65,7 +66,7 @@ def find_optimal_rock_to_break(board):
             
     path.reverse()
     for r, c in path:
-        if getattr(board.grid[r][c], 'is_rock', False):
+        if board.grid[r][c].is_rock:
             return board.grid[r][c]
     return None
 
@@ -193,6 +194,7 @@ def main():
     pause_menu = PauseMenu()
     tutorial_popup = TutorialPopup()
     win_popup = WinPopup()
+    
     skin_screen = SkinScreen()
     
     try:
@@ -201,24 +203,34 @@ def main():
         img_pickaxe_ui = pygame.transform.smoothscale(img_pickaxe, (40, 40))
         img_pickaxe_cursor = pygame.transform.smoothscale(img_pickaxe, (30, 30))
     except pygame.error as e:
-        img_pickaxe_ui = None; img_pickaxe_cursor = None
+        img_pickaxe_ui = None
+        img_pickaxe_cursor = None
+    try:
+        img_coin_ui = pygame.image.load("assets/images/coin_icon.png").convert_alpha()
+        img_coin_ui = pygame.transform.smoothscale(img_coin_ui, (30, 30))
+    except: img_coin_ui = None
 
     btn_options = Button(WINDOW_WIDTH - 120, 20, 100, 50, "MENU", (50, 50, 50), (255, 255, 255))
-    btn_buy_pickaxe = Button(75, WINDOW_HEIGHT - 90, 40, 40, "+", (46, 204, 113))
+    btn_buy_pickaxe = Button(75, WINDOW_HEIGHT - 120, 40, 40, "+", (46, 204, 113))
     
-    game_board = None; player_coins = global_coins; player_pickaxes = global_pickaxes
-    player_name = ""; current_state = STATE_MENU_NAME
+    game_board = None
+    player_coins = global_coins; player_pickaxes = global_pickaxes
+    player_name = ""
+    current_state = STATE_MENU_NAME
     quest_data = normalize_quest_data(global_quest_data, unlocked_levels)
     
-    game_notif = ""; game_notif_alpha = 0
+    game_notif = ""
+    game_notif_alpha = 0
     
     try:
         raw_game_bg = pygame.image.load(BG_GAME_PATH).convert()
         game_bg = pygame.transform.smoothscale(raw_game_bg, (WINDOW_WIDTH, WINDOW_HEIGHT))
     except pygame.error as e: game_bg = None
     
-    is_paused = False; show_tutorial = False; show_win = False; is_winning = False 
-    win_timer = 0; ai_solving = False; ai_timer = 0; is_pickaxe_active = False 
+    is_paused = False
+    show_tutorial = False; show_win = False; is_winning = False 
+    win_timer = 0; ai_solving = False
+    ai_timer = 0; is_pickaxe_active = False 
     
     ai_paid_this_level = False       
     ai_paused_for_pickaxe = False    
@@ -267,7 +279,7 @@ def main():
                         try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
                         except: pass
                 elif action == "BUY_PICKAXE_3":
-                    player_coins -= 250; player_pickaxes = 3
+                    player_coins -= 250; player_pickaxes += 3 # Sửa thành += 3 để cộng thêm vào số cuốc hiện có
                     save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                     if sound_coin:
                         try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
@@ -312,24 +324,26 @@ def main():
                 elif is_winning: pass
                 else:
                     btn_options.check_hover(mouse_pos)
-                    btn_buy_pickaxe.is_enabled = (player_pickaxes < 3) 
+                    btn_buy_pickaxe.is_enabled = (player_pickaxes < 9) 
                     btn_buy_pickaxe.check_hover(mouse_pos)
                     
                     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                         if btn_options.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
                             is_paused = True; is_pickaxe_active = False; ai_paused_for_pickaxe = False
                         elif btn_buy_pickaxe.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
-                            if player_coins >= 100 and player_pickaxes < 3:
+                            if player_coins >= 100 and player_pickaxes < 9: # Sửa thành 9
                                 player_coins -= 100; player_pickaxes += 1
                                 save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                                 if ai_paused_for_pickaxe:
                                     ai_solving = True; ai_paused_for_pickaxe = False
                             else:
-                                game_notif = "KHÔNG ĐỦ XU ĐỂ MUA CUỐC!"; game_notif_alpha = 255
+                                game_notif = "KHÔNG ĐỦ XU HOẶC TÚI ĐÃ ĐẦY!"; game_notif_alpha = 255
                         else:
-                            pickaxe_area = pygame.Rect(20, WINDOW_HEIGHT - 200, 45, 155)
+                            # Vùng click bao trọn cột dọc 9 ô cuốc (rộng 50px, kéo dài lên trên)
+                            pickaxe_area = pygame.Rect(18, WINDOW_HEIGHT - 500, 50, 430) 
+                            
                             if pickaxe_area.collidepoint(mouse_pos):
-                                if player_pickaxes > 0: is_pickaxe_active = not is_pickaxe_active 
+                                if player_pickaxes > 0: is_pickaxe_active = not is_pickaxe_active  
                             else:
                                 if is_pickaxe_active:
                                     if hasattr(game_board, 'break_rock'):
@@ -353,7 +367,7 @@ def main():
                 ai_pickaxe_progress += 0.05 
                 
                 if ai_pickaxe_progress >= 1.0:
-                    ai_target_rock.is_rock = False 
+                    ai_target_rock.break_rock() 
                     player_pickaxes -= 1
                     game_board.update_connectivity()
                     save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
@@ -377,7 +391,7 @@ def main():
                         if move:
                             r_ai, c_ai, _ = move
                             node_ai = game_board.grid[r_ai][c_ai]
-                            if getattr(node_ai, 'is_rock', False) or getattr(node_ai, 'is_fixed', False):
+                            if node_ai.is_rock or node_ai.is_fixed:
                                 move = None 
 
                         if move:
@@ -390,46 +404,58 @@ def main():
                                 sound_button.play()
                             ai_timer = current_time 
                         else:
-                            rocks_on_board = []
-                            for r in range(game_board.rows):
-                                for c in range(game_board.cols):
-                                    if getattr(game_board.grid[r][c], 'is_rock', False):
-                                        rocks_on_board.append(game_board.grid[r][c])
+                            # TÌM VIÊN ĐÁ TỐI ƯU TRÊN ĐƯỜNG NGẮN NHẤT
+                            target_rock = None
+                            best_rock_score = -9999
                             
-                            if rocks_on_board:
-                                target_rock = None
+                            # Lấy tọa độ tất cả các ô đang có nước
+                            powered_nodes = [(r, c) for r in range(game_board.rows) for c in range(game_board.cols) if game_board.grid[r][c].is_powered]
+                            
+                            if powered_nodes:
                                 for r in range(game_board.rows):
                                     for c in range(game_board.cols):
-                                        if game_board.grid[r][c].is_powered:
-                                            for dr, dc in [(-1,0), (1,0), (0,-1), (0,1)]:
-                                                nr, nc = r+dr, c+dc
-                                                if 0 <= nr < game_board.rows and 0 <= nc < game_board.cols:
-                                                    if getattr(game_board.grid[nr][nc], 'is_rock', False):
-                                                        target_rock = game_board.grid[nr][nc]
-                                                        break
-                                        if target_rock: break
-                                
-                                if not target_rock:
-                                    target_rock = random.choice(rocks_on_board)
-                                
+                                        if game_board.grid[r][c].is_rock:
+                                            # Tính khoảng cách đến đích
+                                            dist_to_end = abs(r - (game_board.rows - 1)) + abs(c - (game_board.cols - 1))
+                                            # Tính khoảng cách đến dòng nước gần nhất
+                                            min_dist_to_water = min([abs(r - pr) + abs(c - pc) for pr, pc in powered_nodes])
+                                            
+                                            # Chỉ nhắm vào đá nằm quanh khu vực nước (bán kính 3 ô)
+                                            if min_dist_to_water <= 3:
+                                                # Điểm = Trừ khoảng cách đến đích (ưu tiên gần đích) - Khoảng cách đến nước
+                                                rock_score = -dist_to_end - (min_dist_to_water * 2)
+                                                if rock_score > best_rock_score:
+                                                    best_rock_score = rock_score
+                                                    target_rock = game_board.grid[r][c]
+
+                            if target_rock:
                                 if player_pickaxes > 0:
                                     ai_target_rock = target_rock
                                     ai_pickaxe_start_pos = (40, WINDOW_HEIGHT - 100) 
-                                    
                                     offset_x = (WINDOW_WIDTH - (game_board.cols * TILE_SIZE)) // 2
                                     offset_y = (WINDOW_HEIGHT - (game_board.rows * TILE_SIZE)) // 2
                                     tx = offset_x + target_rock.col * TILE_SIZE + TILE_SIZE // 2
                                     ty = offset_y + target_rock.row * TILE_SIZE + TILE_SIZE // 2
                                     ai_pickaxe_target_pos = (tx, ty)
-                                    
                                     ai_pickaxe_current_pos = list(ai_pickaxe_start_pos)
                                     ai_pickaxe_progress = 0.0
                                     ai_animating_pickaxe = True 
                                 else:
-                                    ai_solving = False; ai_paused_for_pickaxe = True
-                                    game_notif = "HẾT CUỐC! MUA THÊM CUỐC ĐỂ AI PHÁ ĐÁ!"; game_notif_alpha = 255
+                                    ai_solving = False
+                                    ai_paused_for_pickaxe = True
+                                    game_notif = "HẾT CUỐC! MUA THÊM CUỐC ĐỂ AI PHÁ ĐÁ!"
+                                    game_notif_alpha = 255
                             else:
-                                ai_solving = False      
+                                # NẾU KHÔNG CÓ ĐÁ NÀO QUANH ĐÓ -> XOAY BỪA ĐỂ TÌM HƯỚNG MỚI
+                                unfixed_nodes = [(r, c) for r in range(game_board.rows) for c in range(game_board.cols)
+                                                 if not game_board.grid[r][c].is_fixed and not game_board.grid[r][c].is_rock]
+                                if unfixed_nodes:
+                                    rand_r, rand_c = random.choice(unfixed_nodes)
+                                    game_board.grid[rand_r][rand_c].rotate()
+                                    game_board.update_connectivity()
+                                    ai_timer = current_time
+                                else:
+                                    ai_solving = False
 
             if not show_win and not show_tutorial and not is_paused and not is_winning:
                 if game_board.check_win():
@@ -530,19 +556,35 @@ def main():
             else: screen.fill(BG_COLOR)
             game_board.draw(screen); btn_options.draw(screen)
             
-            font_coin_game = pygame.font.SysFont("tahoma", 30, bold=True)
-            coin_text = f"COIN: {player_coins}"
-            start_screen.draw_text_outline(screen, coin_text, font_coin_game, (255, 215, 0), (0,0,0), (WINDOW_WIDTH - 230, 45))
+            box_xu_rect = pygame.Rect(20, 20, 180, 45)
+            pygame.draw.rect(screen, (255, 255, 255), box_xu_rect, border_radius=10)
+            pygame.draw.rect(screen, (200, 200, 200), box_xu_rect, 2, border_radius=10)
             
-            start_x = 22; start_y = WINDOW_HEIGHT - 200
-            for i in range(3):
-                slot_rect = pygame.Rect(start_x, start_y + i*55, 42, 42)
-                has_pickaxe = (3 - i) <= player_pickaxes 
+            if img_coin_ui: 
+                screen.blit(img_coin_ui, (box_xu_rect.x + 10, box_xu_rect.y + 7))
+                
+            font_coin_game = pygame.font.SysFont("tahoma", 24, bold=True)
+            start_screen.draw_text_outline(screen, f"{player_coins} XU", font_coin_game, (241, 196, 15), (0,0,0), (box_xu_rect.x + 105, box_xu_rect.centery))
+            
+            # VẼ CỘT DỌC 9 Ô CUỐC HƯỚNG LÊN TRÊN
+            start_x = 22
+            start_y = WINDOW_HEIGHT - 120 # Tọa độ Y của ô cuốc dưới cùng
+            max_pickaxes = 9
+            
+            for i in range(max_pickaxes):
+                slot_rect = pygame.Rect(start_x, start_y - i * 45, 42, 42)
+                has_pickaxe = i < player_pickaxes 
+                
                 pygame.draw.rect(screen, (80, 80, 80) if has_pickaxe else (40, 40, 40), slot_rect, border_radius=8)
+                
                 border_color = (200, 200, 200)
-                if has_pickaxe: border_color = (46, 204, 113) if (is_pickaxe_active and (3-i) == player_pickaxes) else (241, 196, 15)
+                if has_pickaxe: 
+                    border_color = (46, 204, 113) if (is_pickaxe_active and i == player_pickaxes - 1) else (241, 196, 15)
+                
                 pygame.draw.rect(screen, border_color, slot_rect, width=2 if has_pickaxe else 1, border_radius=8)
-                if has_pickaxe and img_pickaxe_ui: screen.blit(img_pickaxe_ui, (slot_rect.x + 1, slot_rect.y + 1))
+                if has_pickaxe and img_pickaxe_ui: 
+                    screen.blit(img_pickaxe_ui, (slot_rect.x + 1, slot_rect.y + 1))
+                    
             btn_buy_pickaxe.draw(screen)
             
             if is_pickaxe_active and img_pickaxe_cursor:
