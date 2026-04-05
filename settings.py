@@ -28,9 +28,10 @@ STATE_GAME_PLAY = 3
 STATE_SHOP = 4
 STATE_QUESTS = 5
 STATE_SKIN = 6
+STATE_CUSTOM_SETUP = 7
 
 # ==========================================
-# CẤU HÌNH NHIỆM VỤ (Đã Viết Có Dấu Tiếng Việt)
+# CẤU HÌNH NHIỆM VỤ
 # ==========================================
 QUEST_DEFINITIONS = [
     {
@@ -82,3 +83,14 @@ QUEST_STAT_DEFAULTS = {
     "replays_used": 0,
     "highest_unlocked_level": 1,
 }
+
+# ==========================================
+# CẤU HÌNH ĐỘ KHÓ
+# ==========================================
+DIFF_EASY = 0
+DIFF_NORMAL = 1
+DIFF_HARD = 2
+
+COLOR_EASY = (46, 204, 113)   # Xanh lá
+COLOR_NORMAL = (241, 196, 15) # Vàng
+COLOR_HARD = (231, 76, 60)    # Đỏ

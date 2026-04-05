@@ -5,23 +5,22 @@ import sys
 import random
 import io
 import heapq 
+import math
 
 from settings import *
-from board import Board
+from board import Board, Node
 try:
     from hill_climbing import get_best_single_rotation
 except ImportError:
     def get_best_single_rotation(board): return None 
 
-from screens import StartScreen, DashboardScreen, LevelSelectScreen, ShopScreen, QuestsScreen, PauseMenu, TutorialPopup, WinPopup, Button, SkinScreen
+from screens import StartScreen, DashboardScreen, LevelSelectScreen, ShopScreen, QuestsScreen, PauseMenu, TutorialPopup, WinPopup, Button, SkinScreen, CustomSetupScreen, STATE_CUSTOM_SETUP, get_en_font, TradePopup
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 SAVE_FILE = "save_data.json"
 
-# =================================================================
-# AI TÌM ĐÁ TỐI ƯU (Của Sếp)
-# =================================================================
+
 def find_optimal_rock_to_break(board):
     rows, cols = board.rows, board.cols
     distances = { (r, c): float('inf') for r in range(rows) for c in range(cols) }
@@ -70,9 +69,6 @@ def find_optimal_rock_to_break(board):
             return board.grid[r][c]
     return None
 
-# =================================================================
-# HỆ THỐNG NHIỆM VỤ MỚI (Của nhánh UI3)
-# =================================================================
 def build_default_quest_data(current_unlocked=1):
     quest_stats = QUEST_STAT_DEFAULTS.copy()
     quest_stats["highest_unlocked_level"] = max(1, int(current_unlocked))
@@ -131,29 +127,45 @@ def claim_quest_reward(quest_data, quest_id):
 # =================================================================
 # DUNG HỢP FILE LƯU TRỮ (Gộp Cuốc và Nhiệm vụ)
 # =================================================================
+player_unlocked_bgs = ["DEFAULT"] 
+custom_levels_data = {} # LƯU TRỮ MAP CUSTOM CỦA NGƯỜI CHƠI
+player_unlocked_skins = ["DEFAULT"] # LƯU SKIN ĐÃ MUA
+player_equipped_skin = "DEFAULT" # LƯU SKIN ĐANG DÙNG
+
+
 def load_progress():
+    global player_unlocked_bgs, custom_levels_data, player_unlocked_skins, player_equipped_skin
     if os.path.exists(SAVE_FILE):
         try:
             with open(SAVE_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                player_unlocked_bgs = data.get('unlocked_bgs', ["DEFAULT"])
+                custom_levels_data = data.get('custom_levels', {})
+                player_unlocked_skins = data.get('unlocked_skins', ["DEFAULT"])
+                player_equipped_skin = data.get('equipped_skin', "DEFAULT")
                 unlocked_levels = data.get('unlocked_levels', 1)
                 coins = data.get('coins', 100)
                 player_name = data.get('player_name', "")
                 redeemed_codes = data.get('redeemed_codes', [])
-                pickaxes = data.get('pickaxes', 3) # Của Sếp
-                quest_data = normalize_quest_data(data.get('quest_data', {}), unlocked_levels) # Của UI3
+                pickaxes = data.get('pickaxes', 3) 
+                quest_data = normalize_quest_data(data.get('quest_data', {}), unlocked_levels) 
                 return unlocked_levels, coins, player_name, redeemed_codes, pickaxes, quest_data
         except: pass
     return 1, 100, "", [], 3, build_default_quest_data(1)
 
 def save_progress(level, coins, name, redeemed_codes, pickaxes, quest_data):
+    global player_unlocked_bgs, custom_levels_data, player_unlocked_skins, player_equipped_skin
     data = {
         'unlocked_levels': level,
         'coins': coins,
         'player_name': name,
         'redeemed_codes': redeemed_codes,
-        'pickaxes': pickaxes, # Của Sếp
-        'quest_data': normalize_quest_data(quest_data, level) # Của UI3
+        'pickaxes': pickaxes, 
+        'quest_data': normalize_quest_data(quest_data, level), 
+        'unlocked_bgs': player_unlocked_bgs,
+        'custom_levels': custom_levels_data,
+        'unlocked_skins': player_unlocked_skins,
+        'equipped_skin': player_equipped_skin
     }
     with open(SAVE_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False)
@@ -162,23 +174,50 @@ unlocked_levels, global_coins, global_name, redeemed_codes, global_pickaxes, glo
 MAX_LEVELS = 60
 
 def main():
-    global unlocked_levels
+    global unlocked_levels, player_equipped_skin, player_unlocked_skins
+    def reset_level_vars():
+        nonlocal show_tutorial, is_paused, show_win, is_winning, is_pickaxe_active, ai_solving, game_bg
+        nonlocal ai_paid_this_level, ai_paused_for_pickaxe, ai_animating_pickaxe
+        nonlocal trades_remaining, trade_mode_active, show_trade_popup, trade_target_pos, hint_targets
+        nonlocal moves_remaining, show_lose, is_losing # THÊM BIẾN LOSE
+        
+        show_tutorial = False; is_paused = False; show_win = False; is_winning = False; is_pickaxe_active = False
+        show_lose = False; is_losing = False
+        ai_paid_this_level = False; ai_paused_for_pickaxe = False; ai_animating_pickaxe = False; ai_solving = False
+        trade_mode_active = False; show_trade_popup = False; trade_target_pos = None; hint_targets.clear()
+        
+        if level_select_screen.selected_act == 0:
+            c_id = str(level_select_screen.selected_level - 1000)
+            if c_id in custom_levels_data:
+                trades_remaining = custom_levels_data[c_id].get("swaps", 0)
+                moves_remaining = custom_levels_data[c_id].get("moves", -1)
+                bg_name = custom_levels_data[c_id].get("bg", "DEFAULT")
+                try: game_bg = pygame.transform.smoothscale(pygame.image.load(f"assets/images/bg_{bg_name.lower()}.jpg").convert(), (WINDOW_WIDTH, WINDOW_HEIGHT))
+                except: 
+                    try: game_bg = pygame.transform.smoothscale(pygame.image.load(f"assets/images/bg_{bg_name.lower()}.png").convert(), (WINDOW_WIDTH, WINDOW_HEIGHT))
+                    except: game_bg = None
+            else:
+                trades_remaining = -1 if custom_setup_screen.swaps > 20 else custom_setup_screen.swaps 
+                moves_remaining = -1 if custom_setup_screen.moves > 50 else custom_setup_screen.moves
+        else:
+            try: game_bg = pygame.transform.smoothscale(pygame.image.load(BG_GAME_PATH).convert(), (WINDOW_WIDTH, WINDOW_HEIGHT))
+            except: game_bg = None
+            diff = level_select_screen.selected_difficulty
+            trades_remaining = -1 if diff == DIFF_EASY else (5 if diff == DIFF_NORMAL else 3)
+            moves_remaining = -1 if diff == DIFF_EASY else (35 if diff == DIFF_NORMAL else 25) # Áp dụng luật Moves mới
+            
     pygame.init()
-    
     pygame.mixer.init()
     try:
         pygame.mixer.music.load("assets/sounds/bgsound.mp3") 
         pygame.mixer.music.set_volume(1.0)
         pygame.mixer.music.play(-1) 
-    except pygame.error as e:
-        print(f"Không tải được nhạc nền: {e}")
+    except pygame.error as e: pass
         
     try: sound_coin = pygame.mixer.Sound("assets/sounds/coin.mp3")
     except pygame.error: sound_coin = None
-        
     try: sound_win = pygame.mixer.Sound("assets/sounds/win.mp3")
     except pygame.error: sound_win = None
-        
     try: sound_button = pygame.mixer.Sound("assets/sounds/button.mp3")
     except pygame.error: sound_button = None
 
@@ -190,11 +229,10 @@ def main():
     dashboard_screen = DashboardScreen()
     level_select_screen = LevelSelectScreen()
     shop_screen = ShopScreen()
-    quests_screen = QuestsScreen() # Đã gọi UI mới của bạn Sếp
+    quests_screen = QuestsScreen() 
     pause_menu = PauseMenu()
     tutorial_popup = TutorialPopup()
     win_popup = WinPopup()
-    
     skin_screen = SkinScreen()
     
     try:
@@ -202,45 +240,34 @@ def main():
         img_pickaxe.set_colorkey((255, 255, 255)) 
         img_pickaxe_ui = pygame.transform.smoothscale(img_pickaxe, (40, 40))
         img_pickaxe_cursor = pygame.transform.smoothscale(img_pickaxe, (30, 30))
-    except pygame.error as e:
-        img_pickaxe_ui = None
-        img_pickaxe_cursor = None
-    try:
-        img_coin_ui = pygame.image.load("assets/images/coin_icon.png").convert_alpha()
-        img_coin_ui = pygame.transform.smoothscale(img_coin_ui, (30, 30))
+    except pygame.error as e: img_pickaxe_ui = None; img_pickaxe_cursor = None
+    
+    try: img_coin_ui = pygame.transform.smoothscale(pygame.image.load("assets/images/coin_icon.png").convert_alpha(), (30, 30))
     except: img_coin_ui = None
 
     btn_options = Button(WINDOW_WIDTH - 120, 20, 100, 50, "MENU", (50, 50, 50), (255, 255, 255))
     btn_buy_pickaxe = Button(75, WINDOW_HEIGHT - 120, 40, 40, "+", (46, 204, 113))
+    btn_hint = Button(WINDOW_WIDTH - 200, WINDOW_HEIGHT - 80, 180, 50, "GOI Y", (230, 126, 34), font_size=24)
+    btn_trade = Button(WINDOW_WIDTH - 200, WINDOW_HEIGHT - 140, 180, 50, "TRADE: OFF", (155, 89, 182), font_size=24)
+    trade_popup = TradePopup()
+    hint_targets = {} 
     
-    game_board = None
+    trades_remaining = -1; moves_remaining = -1
+    trade_mode_active = False; show_trade_popup = False; trade_target_pos = None 
+    game_board = None; custom_setup_screen = CustomSetupScreen() 
+    
     player_coins = global_coins; player_pickaxes = global_pickaxes
-    player_name = ""
-    current_state = STATE_MENU_NAME
+    import board
+    board.CURRENT_SKIN_ID = player_equipped_skin
+    player_name = ""; current_state = STATE_MENU_NAME
     quest_data = normalize_quest_data(global_quest_data, unlocked_levels)
+    game_notif = ""; game_notif_alpha = 0; game_bg = None
     
-    game_notif = ""
-    game_notif_alpha = 0
-    
-    try:
-        raw_game_bg = pygame.image.load(BG_GAME_PATH).convert()
-        game_bg = pygame.transform.smoothscale(raw_game_bg, (WINDOW_WIDTH, WINDOW_HEIGHT))
-    except pygame.error as e: game_bg = None
-    
-    is_paused = False
-    show_tutorial = False; show_win = False; is_winning = False 
-    win_timer = 0; ai_solving = False
-    ai_timer = 0; is_pickaxe_active = False 
-    
-    ai_paid_this_level = False       
-    ai_paused_for_pickaxe = False    
-    
-    ai_animating_pickaxe = False
-    ai_target_rock = None
-    ai_pickaxe_start_pos = (0, 0)
-    ai_pickaxe_target_pos = (0, 0)
-    ai_pickaxe_current_pos = [0, 0]
-    ai_pickaxe_progress = 0.0
+    is_paused = False; show_tutorial = False; show_win = False; is_winning = False; win_timer = 0
+    show_lose = False; is_losing = False
+    ai_solving = False; ai_timer = 0; is_pickaxe_active = False 
+    ai_paid_this_level = False; ai_paused_for_pickaxe = False; ai_animating_pickaxe = False
+    ai_target_rock = None; ai_pickaxe_start_pos = (0, 0); ai_pickaxe_target_pos = (0, 0); ai_pickaxe_current_pos = [0, 0]; ai_pickaxe_progress = 0.0
 
     running = True
     while running:
@@ -250,9 +277,7 @@ def main():
         for event in events:
             if event.type == pygame.QUIT: running = False
             
-            if current_state == STATE_MENU_NAME:                
-                start_screen.handle_event(event)
-
+            if current_state == STATE_MENU_NAME: start_screen.handle_event(event)
             elif current_state == STATE_DASHBOARD: 
                 action = dashboard_screen.handle_event(event, redeemed_codes)
                 if action == "UNLOCK_ALL":
@@ -265,13 +290,40 @@ def main():
                     if "PIPEGOLD" not in redeemed_codes: redeemed_codes.append("PIPEGOLD")
                     save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                     if sound_coin:
-                        try: sound_coin.set_volume(dashboard_screen.sfx_vol)
+                        try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
                         except: pass
-                        sound_coin.play()
                     
-            elif current_state == STATE_LEVEL_SELECT: level_select_screen.handle_event(event, unlocked_levels)
+            elif current_state == STATE_LEVEL_SELECT: 
+                action = level_select_screen.handle_event(event, unlocked_levels, custom_levels_data)
+                if action == "OPEN_CUSTOM_SETUP":
+                    custom_id = level_select_screen.selected_level - 1000 
+                    custom_setup_screen.load_level(custom_id)
+                    current_state = STATE_CUSTOM_SETUP
+                elif action == "PLAY_CUSTOM":
+                    c_id = str(level_select_screen.selected_level - 1000)
+                    game_board = Board(level_id=level_select_screen.selected_level, difficulty=DIFF_NORMAL, custom_data=custom_levels_data[c_id]) 
+                    current_state = STATE_GAME_PLAY
+                    reset_level_vars()
+                    show_tutorial = True  
+                    level_select_screen.next_state = None
+                elif action and action.startswith("DELETE_CUSTOM_"):
+                    idx = action.split("_")[-1]
+                    if idx in custom_levels_data:
+                        del custom_levels_data[idx]
+                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
+                elif level_select_screen.next_state == STATE_GAME_PLAY:
+                    game_board = Board(level_id=level_select_screen.selected_level, difficulty=level_select_screen.selected_difficulty) 
+                    current_state = STATE_GAME_PLAY
+                    reset_level_vars()
+                    show_tutorial = True  
+                    level_select_screen.next_state = None
+                elif level_select_screen.next_state == STATE_DASHBOARD: 
+                    current_state = STATE_DASHBOARD
+                    level_select_screen.next_state = None
+
             elif current_state == STATE_SHOP: 
-                action = shop_screen.handle_event(event, player_coins, player_pickaxes, unlocked_levels)
+                action = shop_screen.handle_event(event, player_coins, player_pickaxes, unlocked_levels, player_unlocked_bgs)
+                
                 if action == "BUY_PICKAXE_1":
                     player_coins -= 100; player_pickaxes += 1
                     save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
@@ -279,7 +331,7 @@ def main():
                         try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
                         except: pass
                 elif action == "BUY_PICKAXE_3":
-                    player_coins -= 250; player_pickaxes += 3 # Sửa thành += 3 để cộng thêm vào số cuốc hiện có
+                    player_coins -= 250; player_pickaxes += 3 
                     save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                     if sound_coin:
                         try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
@@ -287,18 +339,24 @@ def main():
                 elif action and action.startswith("BUY_ACT_"):
                     act_num = int(action.split('_')[-1])
                     act_start_level = (act_num - 1) * 12 + 1
-                    required_level = (act_num - 2) * 12 + 1 # Cấp độ yêu cầu của Act trước
-                    
+                    required_level = (act_num - 2) * 12 + 1 
                     if player_coins >= 1500 and unlocked_levels < act_start_level and unlocked_levels >= required_level:
                         player_coins -= 1500
                         unlocked_levels = act_start_level 
-                        
-                        # Đồng bộ luôn nhiệm vụ "Phá đảo Act" cho chắc
                         quest_data["stats"]["highest_unlocked_level"] = max(quest_data["stats"]["highest_unlocked_level"], unlocked_levels)
-                        
                         save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                         if sound_win:
                             try: sound_win.set_volume(dashboard_screen.sfx_vol); sound_win.play()
+                            except: pass
+                elif action and action.startswith("BUY_BG_"):
+                    bg_name = action.split("BUY_BG_")[-1]
+                    price = 500 if bg_name in ["FOREST", "DESERT"] else 800
+                    if bg_name not in player_unlocked_bgs and player_coins >= price:
+                        player_coins -= price
+                        player_unlocked_bgs.append(bg_name)
+                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
+                        if sound_coin:
+                            try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
                             except: pass
 
             elif current_state == STATE_QUESTS:
@@ -311,56 +369,143 @@ def main():
                         except: pass
                         save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
                         if sound_coin:
-                            try: sound_coin.set_volume(dashboard_screen.sfx_vol)
+                            try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
                             except: pass
-                            sound_coin.play()
 
-            elif current_state == STATE_SKIN: skin_screen.handle_event(event)
+            elif current_state == STATE_SKIN: 
+                # Truyền đủ dữ liệu để shop kiểm tra túi tiền và skin đã sở hữu
+                skin_action = skin_screen.handle_event(event, player_coins, player_unlocked_skins, player_equipped_skin)
+                if skin_action:
+                    if skin_action.startswith("BUY_"):
+                        s_id = skin_action.split("BUY_")[1]
+                        # Mua skin đồng giá 1000 xu
+                        if player_coins >= 1000:
+                            player_coins -= 1000
+                            player_unlocked_skins.append(s_id)
+                            player_equipped_skin = s_id # Tự động trang bị sau khi mua
+                            import board
+                            board.CURRENT_SKIN_ID = player_equipped_skin
+                            save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
+                            if sound_coin:
+                                try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
+                                except: pass
+                        else:
+                            # Không đủ tiền thì thông báo (tận dụng thông báo game có sẵn)
+                            game_notif = "NOT ENOUGH COINS!"; game_notif_alpha = 255
+                    
+                    elif skin_action.startswith("EQUIP_"):
+                        player_equipped_skin = skin_action.split("EQUIP_")[1]
+                        import board
+                        board.CURRENT_SKIN_ID = player_equipped_skin
+                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
+                        if sound_button:
+                            try: sound_button.set_volume(dashboard_screen.sfx_vol); sound_button.play()
+                            except: pass
+                
+                if skin_screen.next_state == STATE_DASHBOARD:
+                    current_state = STATE_DASHBOARD; skin_screen.next_state = None
+
+            elif current_state == STATE_CUSTOM_SETUP: custom_setup_screen.handle_event(event, player_unlocked_bgs)
 
             elif current_state == STATE_GAME_PLAY:
-                if show_win: win_popup.handle_event(event)
+                if show_win or show_lose: win_popup.handle_event(event)
                 elif show_tutorial: tutorial_popup.handle_event(event)
+                elif show_trade_popup:
+                    t_action = trade_popup.handle_event(event)
+                    if t_action == "CANCEL":
+                        show_trade_popup = False; trade_mode_active = False
+                    elif t_action: 
+                        r, c = trade_target_pos
+                        new_node = Node(r, c, t_action)
+                        old_angle = game_board.grid[r][c].target_angle
+                        new_node.angle = old_angle
+                        new_node.target_angle = old_angle
+                        rotations = (int(old_angle) // -90) % 4 
+                        for _ in range(rotations): new_node.conns = [new_node.conns[-1]] + new_node.conns[:-1]
+                        game_board.grid[r][c] = new_node
+                        game_board.update_connectivity()
+                        if trades_remaining > 0: trades_remaining -= 1
+                        show_trade_popup = False; trade_mode_active = False
+                        
                 elif is_paused: pause_menu.handle_event(event)
-                elif is_winning: pass
+                elif is_winning or is_losing: pass
                 else:
                     btn_options.check_hover(mouse_pos)
                     btn_buy_pickaxe.is_enabled = (player_pickaxes < 9) 
                     btn_buy_pickaxe.check_hover(mouse_pos)
+                    btn_hint.check_hover(mouse_pos)
                     
-                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                        if btn_options.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
-                            is_paused = True; is_pickaxe_active = False; ai_paused_for_pickaxe = False
-                        elif btn_buy_pickaxe.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
-                            if player_coins >= 100 and player_pickaxes < 9: # Sửa thành 9
+                    trade_txt = "INF" if trades_remaining == -1 else str(trades_remaining)
+                    if trades_remaining == 0:
+                        btn_trade.is_enabled = False; btn_trade.text = "TRADE: 0 (OFF)"; btn_trade.bg_color = (80, 80, 80)
+                        trade_mode_active = False
+                    else:
+                        btn_trade.is_enabled = True
+                        if trade_mode_active: btn_trade.text = f"TRADE: {trade_txt} (ON)"; btn_trade.bg_color = (46, 204, 113)
+                        else: btn_trade.text = f"TRADE: {trade_txt} (OFF)"; btn_trade.bg_color = (155, 89, 182)
+                    btn_trade.check_hover(mouse_pos)
+                    
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button in [1, 3]:
+                        is_left_click = (event.button == 1)
+                        if is_left_click and btn_options.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
+                            is_paused = True; is_pickaxe_active = False; ai_paused_for_pickaxe = False; trade_mode_active = False
+                        elif is_left_click and btn_buy_pickaxe.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
+                            if player_coins >= 100 and player_pickaxes < 9:
                                 player_coins -= 100; player_pickaxes += 1
                                 save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
-                                if ai_paused_for_pickaxe:
-                                    ai_solving = True; ai_paused_for_pickaxe = False
-                            else:
-                                game_notif = "KHÔNG ĐỦ XU HOẶC TÚI ĐÃ ĐẦY!"; game_notif_alpha = 255
+                                if ai_paused_for_pickaxe: ai_solving = True; ai_paused_for_pickaxe = False
+                            else: game_notif = "NOT COINS OR BAG FULL!"; game_notif_alpha = 255
+                        elif is_left_click and btn_hint.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
+                            moves_found = 0; temp_changes = {} 
+                            for _ in range(3):
+                                move = get_best_single_rotation(game_board)
+                                if move:
+                                    r, c, rotations = move
+                                    if (r, c) not in temp_changes: temp_changes[(r, c)] = game_board.grid[r][c].conns.copy()
+                                    for _ in range(rotations): game_board.grid[r][c].conns = [game_board.grid[r][c].conns[-1]] + game_board.grid[r][c].conns[:-1]
+                                    hint_targets[(r, c)] = game_board.grid[r][c].conns.copy()
+                                    game_board.update_connectivity()
+                                    moves_found += 1
+                                else: break
+                            for (r, c), orig_conns in temp_changes.items(): game_board.grid[r][c].conns = orig_conns
+                            game_board.update_connectivity()
+                            if moves_found > 0: game_notif = f"HÃY XOAY {moves_found} Ô ĐANG NHẤP NHÁY!"; game_notif_alpha = 255
+                            else: game_notif = "ĐÃ ĐI ĐÚNG ĐƯỜNG!"; game_notif_alpha = 255
+                        elif is_left_click and btn_trade.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
+                            if trades_remaining != 0:
+                                trade_mode_active = not trade_mode_active; is_pickaxe_active = False 
                         else:
-                            # Vùng click bao trọn cột dọc 9 ô cuốc (rộng 50px, kéo dài lên trên)
                             pickaxe_area = pygame.Rect(18, WINDOW_HEIGHT - 500, 50, 430) 
-                            
                             if pickaxe_area.collidepoint(mouse_pos):
-                                if player_pickaxes > 0: is_pickaxe_active = not is_pickaxe_active  
+                                if player_pickaxes > 0 and is_left_click: 
+                                    is_pickaxe_active = not is_pickaxe_active; trade_mode_active = False
                             else:
                                 if is_pickaxe_active:
-                                    if hasattr(game_board, 'break_rock'):
-                                        if game_board.break_rock(mouse_pos[0], mouse_pos[1]):
-                                            player_pickaxes -= 1 
-                                            save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
-                                    is_pickaxe_active = False 
-                                    ai_solving = False; ai_paused_for_pickaxe = False
+                                    if is_left_click and hasattr(game_board, 'break_rock') and game_board.break_rock(mouse_pos[0], mouse_pos[1]):
+                                        player_pickaxes -= 1 
+                                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
+                                    is_pickaxe_active = False; ai_solving = False; ai_paused_for_pickaxe = False
                                 else:
-                                    game_board.handle_click(mouse_pos[0], mouse_pos[1])
-                                    if sound_button:
-                                        try: sound_button.set_volume(dashboard_screen.sfx_vol)
-                                        except: pass
-                                        sound_button.play()
-                                    ai_solving = False; ai_paused_for_pickaxe = False 
+                                    offset_x = (WINDOW_WIDTH - (game_board.cols * TILE_SIZE)) // 2
+                                    offset_y = (WINDOW_HEIGHT - (game_board.rows * TILE_SIZE)) // 2
+                                    c_col, c_row = (mouse_pos[0] - offset_x) // TILE_SIZE, (mouse_pos[1] - offset_y) // TILE_SIZE
+                                    if trade_mode_active:
+                                        if is_left_click and 0 <= c_row < game_board.rows and 0 <= c_col < game_board.cols:
+                                            node = game_board.grid[c_row][c_col]
+                                            if getattr(node, 'is_fixed', False) or getattr(node, 'is_rock', False) or node.pipe_type == 'P':
+                                                game_notif = "CANNOT TRADE THIS PIPE!"; game_notif_alpha = 255
+                                            else:
+                                                trade_target_pos = (c_row, c_col); show_trade_popup = True
+                                    else:
+                                        if game_board.handle_click(mouse_pos[0], mouse_pos[1], is_left_click):
+                                            if moves_remaining > 0: moves_remaining -= 1
+                                        if (c_row, c_col) in hint_targets and game_board.grid[c_row][c_col].conns == hint_targets[(c_row, c_col)]:
+                                            del hint_targets[(c_row, c_col)]
+                                        if sound_button:
+                                            try: sound_button.set_volume(dashboard_screen.sfx_vol); sound_button.play()
+                                            except: pass
                     if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                        is_paused = True; is_pickaxe_active = False; ai_paused_for_pickaxe = False
+                        is_paused = True; is_pickaxe_active = False; ai_paused_for_pickaxe = False; trade_mode_active = False
 
         if current_state == STATE_GAME_PLAY and game_board:
             if ai_animating_pickaxe and not is_paused:
@@ -443,7 +588,7 @@ def main():
                                 else:
                                     ai_solving = False
                                     ai_paused_for_pickaxe = True
-                                    game_notif = "HẾT CUỐC! MUA THÊM CUỐC ĐỂ AI PHÁ ĐÁ!"
+                                    game_notif = "NO PICKAXES! Buy More!"
                                     game_notif_alpha = 255
                             else:
                                 # NẾU KHÔNG CÓ ĐÁ NÀO QUANH ĐÓ -> XOAY BỪA ĐỂ TÌM HƯỚNG MỚI
@@ -457,34 +602,58 @@ def main():
                                 else:
                                     ai_solving = False
 
-            if not show_win and not show_tutorial and not is_paused and not is_winning:
+            if not show_win and not show_lose and not show_tutorial and not is_paused and not is_winning and not is_losing:
                 if game_board.check_win():
-                    is_winning = True; win_timer = pygame.time.get_ticks() 
-                    earned = random.randint(1000, 1500); player_coins += earned
+                    is_winning = True; win_timer = pygame.time.get_ticks(); win_popup.is_win = True
                     
-                    quest_data["stats"]["levels_completed"] += 1
-                    quest_data["stats"]["total_coins_earned"] += earned
-
-                    if sound_coin:
-                        try: sound_coin.set_volume(dashboard_screen.sfx_vol)
-                        except: pass
-                        sound_coin.play()
-                    if sound_win:
-                        try: sound_win.set_volume(dashboard_screen.sfx_vol)
-                        except: pass
-                        sound_win.play()
+                    # LOGIC THƯỞNG GIỜ ĐÃ NẰM ĐÚNG BÊN DƯỚI ĐIỀU KIỆN THẮNG
+                    if level_select_screen.selected_act == 0:
+                        # CHẾ ĐỘ CUSTOM: KHÔNG THƯỞNG COIN
+                        earned = 0
+                        win_popup.earned_coins = earned 
+                        if sound_win:
+                            try: sound_win.set_volume(dashboard_screen.sfx_vol)
+                            except: pass
+                            sound_win.play()
+                    else:
+                        # TĂNG TIẾN TIỀN THƯỞNG THEO ĐỘ KHÓ
+                        if level_select_screen.selected_difficulty == DIFF_EASY:
+                            earned = random.randint(500, 800)
+                        elif level_select_screen.selected_difficulty == DIFF_NORMAL:
+                            earned = random.randint(1000, 1500)
+                        else: # DIFF_HARD
+                            earned = random.randint(2000, 3000)
+                            
+                        player_coins += earned
+                        quest_data["stats"]["levels_completed"] += 1
+                        quest_data["stats"]["total_coins_earned"] += earned
                         
-                    win_popup.earned_coins = earned 
+                        if sound_coin:
+                            try: sound_coin.set_volume(dashboard_screen.sfx_vol)
+                            except: pass
+                            sound_coin.play()
+                            
+                        if sound_win:
+                            try: sound_win.set_volume(dashboard_screen.sfx_vol)
+                            except: pass
+                            sound_win.play()
+                            
+                        if level_select_screen.selected_level == unlocked_levels and unlocked_levels < MAX_LEVELS:
+                            unlocked_levels += 1
+                            quest_data["stats"]["highest_unlocked_level"] = max(quest_data["stats"]["highest_unlocked_level"], unlocked_levels)
+                        
+                        win_popup.earned_coins = earned 
+                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
+
+                # NẾU MOVES VỀ 0 THÌ GAME OVER (Lệnh này phải nằm riêng biệt)
+                elif moves_remaining == 0:
+                    is_losing = True; win_timer = pygame.time.get_ticks(); win_popup.is_win = False
                     
-                    if level_select_screen.selected_level == unlocked_levels and unlocked_levels < MAX_LEVELS:
-                        unlocked_levels += 1
-                        quest_data["stats"]["highest_unlocked_level"] = max(quest_data["stats"]["highest_unlocked_level"], unlocked_levels)
-                    
-                    save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
-                    
-            if is_winning:
+            if is_winning or is_losing:
                 current_time = pygame.time.get_ticks()
-                if current_time - win_timer >= 2000: show_win = True; is_winning = False 
+                if current_time - win_timer >= 1000: 
+                    if is_winning: show_win = True; is_winning = False 
+                    if is_losing: show_lose = True; is_losing = False 
 
         if current_state == STATE_MENU_NAME and start_screen.next_state == STATE_DASHBOARD:
             player_name = start_screen.player_name; current_state = STATE_DASHBOARD
@@ -494,10 +663,10 @@ def main():
             current_state = dashboard_screen.next_state; dashboard_screen.next_state = None 
         elif current_state == STATE_LEVEL_SELECT:
             if level_select_screen.next_state == STATE_GAME_PLAY:
-                game_board = Board(level_id=level_select_screen.selected_level) 
-                current_state = STATE_GAME_PLAY; show_tutorial = True  
-                is_paused = False; show_win = False; is_winning = False; is_pickaxe_active = False
-                ai_paid_this_level = False; ai_paused_for_pickaxe = False; ai_animating_pickaxe = False
+                game_board = Board(level_id=level_select_screen.selected_level, difficulty=level_select_screen.selected_difficulty) 
+                current_state = STATE_GAME_PLAY
+                reset_level_vars() # GỌI HÀM RESET Ở ĐÂY
+                show_tutorial = True  
                 level_select_screen.next_state = None
             elif level_select_screen.next_state == STATE_DASHBOARD: current_state = STATE_DASHBOARD; level_select_screen.next_state = None
         elif current_state == STATE_SKIN and skin_screen.next_state == STATE_DASHBOARD: current_state = STATE_DASHBOARD; skin_screen.next_state = None
@@ -505,25 +674,48 @@ def main():
         elif current_state == STATE_QUESTS and quests_screen.next_state == STATE_DASHBOARD: current_state = STATE_DASHBOARD; quests_screen.next_state = None
                 
         elif current_state == STATE_GAME_PLAY:
-            if show_win:
+            if show_win or show_lose:
                 if win_popup.action == "MENU": 
-                    current_state = STATE_LEVEL_SELECT; show_win = False; is_winning = False; ai_solving = False; win_popup.action = None
+                    current_state = STATE_LEVEL_SELECT
+                    show_win = False; show_lose = False; is_winning = False; is_losing = False; ai_solving = False; win_popup.action = None
                     ai_animating_pickaxe = False
                 elif win_popup.action == "NEXT":
                     level_select_screen.selected_level = (level_select_screen.selected_level % MAX_LEVELS) + 1
-                    game_board = Board(level_id=level_select_screen.selected_level)
-                    show_win = False; is_winning = False; ai_solving = False; is_pickaxe_active = False; show_tutorial = True; win_popup.action = None
-                    ai_paid_this_level = False; ai_paused_for_pickaxe = False; ai_animating_pickaxe = False
+                    game_board = Board(level_id=level_select_screen.selected_level, difficulty=level_select_screen.selected_difficulty)
+                    reset_level_vars()
+                    show_tutorial = True
+                    win_popup.action = None
                 elif win_popup.action == "REPLAY": 
                     quest_data["stats"]["replays_used"] += 1
-                    game_board = Board(level_id=level_select_screen.selected_level)
-                    show_win = False; is_winning = False; ai_solving = False; is_pickaxe_active = False; win_popup.action = None
-                    ai_paid_this_level = False; ai_paused_for_pickaxe = False; ai_animating_pickaxe = False
-            elif show_tutorial and tutorial_popup.action == "UNDERSTOOD": show_tutorial = False; tutorial_popup.action = None
+                    # Hỗ trợ reset cho cả map Custom
+                    if level_select_screen.selected_act == 0:
+                        c_id = str(custom_setup_screen.custom_id)
+                        game_board = Board(level_id=1000 + custom_setup_screen.custom_id, difficulty=DIFF_NORMAL, custom_data=custom_levels_data.get(c_id))
+                    else:
+                        game_board = Board(level_id=level_select_screen.selected_level, difficulty=level_select_screen.selected_difficulty)
+                    reset_level_vars()
+                    win_popup.action = None
+                elif win_popup.action == "BUY_MOVES":
+                    if player_coins >= 100: # KIỂM TRA ĐỦ 100 COIN
+                        player_coins -= 100
+                        moves_remaining += 5 # Bơm thêm 5 lượt
+                        show_lose = False; is_losing = False # Tắt bảng Game Over, hồi sinh game
+                        win_popup.action = None
+                        save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
+                        if sound_coin:
+                            try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
+                            except: pass
+                    else:
+                        game_notif = "NOT ENOUGH COINS!" # Không đủ tiền thì hiện thông báo
+                        game_notif_alpha = 255
+                        win_popup.action = None
+            elif show_tutorial and tutorial_popup.action == "UNDERSTOOD": 
+                show_tutorial = False; tutorial_popup.action = None
             elif is_paused:
                 if pause_menu.action == "RESTART": 
-                    game_board = Board(level_id=level_select_screen.selected_level); is_paused = False; is_winning = False; ai_solving = False; is_pickaxe_active = False; pause_menu.action = None
-                    ai_paid_this_level = False; ai_paused_for_pickaxe = False; ai_animating_pickaxe = False
+                    game_board = Board(level_id=level_select_screen.selected_level, difficulty=level_select_screen.selected_difficulty)
+                    reset_level_vars()
+                    pause_menu.action = None
                 elif pause_menu.action == "AI_SOLVE":
                     if ai_paid_this_level:
                         ai_solving = True; is_paused = False; ai_paused_for_pickaxe = False; pause_menu.action = None
@@ -548,23 +740,95 @@ def main():
             if game_bg: screen.blit(game_bg, (0, 0))
             else: screen.fill(BG_COLOR)
             level_select_screen.draw(screen)
-        elif current_state == STATE_SHOP: shop_screen.draw(screen, player_coins, player_pickaxes)
+        elif current_state == STATE_CUSTOM_SETUP:
+            custom_setup_screen.draw(screen, player_unlocked_bgs)
+            if custom_setup_screen.next_state == STATE_LEVEL_SELECT:
+                current_state = STATE_LEVEL_SELECT
+                custom_setup_screen.next_state = None
+            elif custom_setup_screen.next_state == STATE_GAME_PLAY:
+                c_id = str(custom_setup_screen.custom_id) 
+                swaps_val = -1 if custom_setup_screen.swaps > 20 else custom_setup_screen.swaps
+                moves_val = -1 if custom_setup_screen.moves > 50 else custom_setup_screen.moves # ĐÃ FIX: LƯU MAX MOVES VÀO BỘ NHỚ
+                
+                custom_levels_data[c_id] = {
+                    "rocks": custom_setup_screen.rocks,
+                    "bg": custom_setup_screen.bgs[custom_setup_screen.bg_idx],
+                    "swaps": swaps_val, 
+                    "moves": moves_val, # GHI DỮ LIỆU MOVES XUỐNG FILE
+                    "size": custom_setup_screen.sizes[custom_setup_screen.size_idx],
+                    "pipes": [p for p, active in custom_setup_screen.pipe_active.items() if active]
+                }
+                save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
+                
+                game_board = Board(level_id=1000 + custom_setup_screen.custom_id, difficulty=DIFF_NORMAL, custom_data=custom_levels_data[c_id]) 
+                current_state = STATE_GAME_PLAY
+                reset_level_vars() 
+                show_tutorial = True
+                custom_setup_screen.next_state = None
+
+
+        elif current_state == STATE_CUSTOM_SETUP:
+            custom_setup_screen.draw(screen, player_unlocked_bgs)
+            if custom_setup_screen.next_state == STATE_LEVEL_SELECT:
+                current_state = STATE_LEVEL_SELECT
+                custom_setup_screen.next_state = None
+            elif custom_setup_screen.next_state == STATE_GAME_PLAY:
+                # 1. Lưu cấu hình sếp vừa tạo vào bộ nhớ
+                swaps_val = -1 if custom_setup_screen.swaps > 20 else custom_setup_screen.swaps
+                custom_levels_data[c_id] = {
+                    "rocks": custom_setup_screen.rocks,
+                    "bg": custom_setup_screen.bgs[custom_setup_screen.bg_idx],
+                    "swaps": swaps_val, 
+                    "size": custom_setup_screen.sizes[custom_setup_screen.size_idx], # LƯU KÍCH THƯỚC BÀN CỜ
+                    "pipes": [p for p, active in custom_setup_screen.pipe_active.items() if active]
+                }
+                save_progress(unlocked_levels, player_coins, player_name, redeemed_codes, player_pickaxes, quest_data)
+                
+                # 2. Tạo màn chơi và đưa sếp vào game
+                game_board = Board(level_id=1000 + custom_setup_screen.custom_id, difficulty=DIFF_NORMAL, custom_data=custom_levels_data[c_id]) 
+                current_state = STATE_GAME_PLAY
+                reset_level_vars() 
+                show_tutorial = True
+                custom_setup_screen.next_state = None
+
+        elif current_state == STATE_SHOP: 
+            shop_screen.draw(screen, player_coins, player_pickaxes, player_unlocked_bgs)
         elif current_state == STATE_QUESTS: quests_screen.draw(screen, quest_data)
-        elif current_state == STATE_SKIN: skin_screen.draw(screen)
+        elif current_state == STATE_SKIN: skin_screen.draw(screen, player_coins, player_unlocked_skins, player_equipped_skin)
         elif current_state == STATE_GAME_PLAY and game_board:
             if game_bg: screen.blit(game_bg, (0, 0))
             else: screen.fill(BG_COLOR)
-            game_board.draw(screen); btn_options.draw(screen)
             
-            box_xu_rect = pygame.Rect(20, 20, 180, 45)
-            pygame.draw.rect(screen, (255, 255, 255), box_xu_rect, border_radius=10)
-            pygame.draw.rect(screen, (200, 200, 200), box_xu_rect, 2, border_radius=10)
-            
-            if img_coin_ui: 
-                screen.blit(img_coin_ui, (box_xu_rect.x + 10, box_xu_rect.y + 7))
+            # Phải có 4 dòng này thì bàn cờ và nút mới hiện lên
+            game_board.draw(screen)
+            btn_options.draw(screen)
+            btn_hint.draw(screen)
+            btn_trade.draw(screen)
+
+            # HIỂN THỊ ĐẾM NGƯỢC SỐ LẦN XOAY SAI MÉP TRÊN
+            if moves_remaining != -1: txt_m = f"MOVES LEFT: {moves_remaining}"; col_m = (231, 76, 60) if moves_remaining <= 3 else (255, 255, 255)
+            else: txt_m = "MOVES LEFT: INF"; col_m = (0, 255, 255)
+            start_screen.draw_text_outline(screen, txt_m, get_en_font(32), col_m, (0,0,0), (WINDOW_WIDTH//2, 25))
+
+            if hint_targets:
+                glow_alpha = int(100 + 155 * abs(math.sin(pygame.time.get_ticks() / 200)))
+                holo_surf = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
+                pygame.draw.rect(holo_surf, (255, 0, 255, glow_alpha), holo_surf.get_rect(), 4, border_radius=5)
+                pygame.draw.rect(holo_surf, (255, 0, 255, glow_alpha//4), holo_surf.get_rect(), border_radius=5)
                 
-            font_coin_game = pygame.font.SysFont("tahoma", 24, bold=True)
-            start_screen.draw_text_outline(screen, f"{player_coins} XU", font_coin_game, (241, 196, 15), (0,0,0), (box_xu_rect.x + 105, box_xu_rect.centery))
+                offset_x = (WINDOW_WIDTH - (game_board.cols * TILE_SIZE)) // 2
+                offset_y = (WINDOW_HEIGHT - (game_board.rows * TILE_SIZE)) // 2
+                
+                # Duyệt qua toàn bộ danh sách các ô gợi ý và vẽ
+                for (r, c) in hint_targets.keys():
+                    x = offset_x + c * TILE_SIZE
+                    y = offset_y + r * TILE_SIZE
+                    screen.blit(holo_surf, (x, y))
+            
+            # Hiển thị Tiền tối giản: Chỉ chữ + COINS, không nền, không logo
+            font_coins_game = get_en_font(32) # Dùng font Pixel cho đồng bộ
+            # Vẽ ở tọa độ (25, 25) để sát góc trái trên
+            start_screen.draw_text_outline(screen, f"{player_coins} COINS", font_coins_game, (241, 196, 15), (0,0,0), (25, 25), align="topleft")
             
             # VẼ CỘT DỌC 9 Ô CUỐC HƯỚNG LÊN TRÊN
             start_x = 22
@@ -575,13 +839,20 @@ def main():
                 slot_rect = pygame.Rect(start_x, start_y - i * 45, 42, 42)
                 has_pickaxe = i < player_pickaxes 
                 
-                pygame.draw.rect(screen, (80, 80, 80) if has_pickaxe else (40, 40, 40), slot_rect, border_radius=8)
+                # 1. Tạo và vẽ nền TRẮNG MỜ
+                slot_bg = pygame.Surface((42, 42), pygame.SRCALPHA)
+                pygame.draw.rect(slot_bg, (255, 255, 255, 60), slot_bg.get_rect(), border_radius=8)
+                screen.blit(slot_bg, slot_rect.topleft)
                 
-                border_color = (200, 200, 200)
+                # 2. Xử lý màu viền
+                border_color = (200, 200, 200) 
                 if has_pickaxe: 
+                    # Nếu đang chọn cúp (Active) thì viền Xanh lá, ngược lại viền Vàng
                     border_color = (46, 204, 113) if (is_pickaxe_active and i == player_pickaxes - 1) else (241, 196, 15)
                 
+                # 3. Vẽ viền ô cúp lên trên lớp nền mờ
                 pygame.draw.rect(screen, border_color, slot_rect, width=2 if has_pickaxe else 1, border_radius=8)
+                
                 if has_pickaxe and img_pickaxe_ui: 
                     screen.blit(img_pickaxe_ui, (slot_rect.x + 1, slot_rect.y + 1))
                     
@@ -603,11 +874,13 @@ def main():
                 screen.blit(txt_surf, txt_surf.get_rect(center=(WINDOW_WIDTH//2, 120)))
                 game_notif_alpha -= 3
             
-            if ai_paid_this_level: pause_menu.btn_ai.text = "TIẾP TỤC AI (FREE)"
-            else: pause_menu.btn_ai.text = "AI GIẢI (-100)"
+            if ai_paid_this_level: pause_menu.btn_ai.text = "Resume AI"
+            else: pause_menu.btn_ai.text = "AI Support"
                 
-            if show_win: win_popup.draw(screen)
+            # Đoạn này dùng để vẽ các bảng thông báo đè lên trên bàn cờ
+            if show_win or show_lose: win_popup.draw(screen)
             elif show_tutorial: tutorial_popup.draw(screen)
+            elif show_trade_popup: trade_popup.draw(screen)
             elif is_paused: pause_menu.draw(screen)
 
         pygame.display.flip()
