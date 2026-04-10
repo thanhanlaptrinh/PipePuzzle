@@ -9,10 +9,19 @@ import math
 
 from settings import *
 from board import Board, Node
+
+from hill_climbing import get_best_single_rotation as get_hc_move
 try:
-    from hill_climbing import get_best_single_rotation
+    from astar_solver import get_best_rotation_astar as get_astar_move
 except ImportError:
-    def get_best_single_rotation(board): return None 
+    def get_astar_move(board): return None
+
+def get_hybrid_move(board):
+    # Ưu tiên Hill Climbing để tối ưu nước đi quanh dòng chảy
+    move = get_hc_move(board)
+    # Nếu HC bó tay (đạt đỉnh cục bộ), dùng A* để tìm đường thoát
+    if move is None: move = get_astar_move(board)
+    return move
 
 from screens import StartScreen, DashboardScreen, LevelSelectScreen, ShopScreen, QuestsScreen, PauseMenu, TutorialPopup, WinPopup, Button, SkinScreen, CustomSetupScreen, STATE_CUSTOM_SETUP, get_en_font, TradePopup
 
@@ -175,16 +184,22 @@ MAX_LEVELS = 60
 
 def main():
     global unlocked_levels, player_equipped_skin, player_unlocked_skins
+    
+    ai_recent_moves = [] # BỘ NHỚ NGẮN HẠN ĐỂ CHỐNG LẶP VÒNG
+    
     def reset_level_vars():
         nonlocal show_tutorial, is_paused, show_win, is_winning, is_pickaxe_active, ai_solving, game_bg
         nonlocal ai_paid_this_level, ai_paused_for_pickaxe, ai_animating_pickaxe
         nonlocal trades_remaining, trade_mode_active, show_trade_popup, trade_target_pos, hint_targets
-        nonlocal moves_remaining, show_lose, is_losing # THÊM BIẾN LOSE
+        nonlocal moves_remaining, show_lose, is_losing 
+        nonlocal ai_recent_moves # KHAI BÁO BIẾN
         
         show_tutorial = False; is_paused = False; show_win = False; is_winning = False; is_pickaxe_active = False
         show_lose = False; is_losing = False
         ai_paid_this_level = False; ai_paused_for_pickaxe = False; ai_animating_pickaxe = False; ai_solving = False
         trade_mode_active = False; show_trade_popup = False; trade_target_pos = None; hint_targets.clear()
+        
+        ai_recent_moves.clear() # XÓA TRÍ NHỚ KHI CHƠI MÀN MỚI
         
         if level_select_screen.selected_act == 0:
             c_id = str(level_select_screen.selected_level - 1000)
@@ -336,7 +351,7 @@ def main():
                     if sound_coin:
                         try: sound_coin.set_volume(dashboard_screen.sfx_vol); sound_coin.play()
                         except: pass
-                elif action and action.startswith("BUY_ACT_"):
+                elif action and action.startswith("BUY_CHAP_"):
                     act_num = int(action.split('_')[-1])
                     act_start_level = (act_num - 1) * 12 + 1
                     required_level = (act_num - 2) * 12 + 1 
@@ -456,21 +471,17 @@ def main():
                                 if ai_paused_for_pickaxe: ai_solving = True; ai_paused_for_pickaxe = False
                             else: game_notif = "NOT COINS OR BAG FULL!"; game_notif_alpha = 255
                         elif is_left_click and btn_hint.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
-                            moves_found = 0; temp_changes = {} 
-                            for _ in range(3):
-                                move = get_best_single_rotation(game_board)
-                                if move:
-                                    r, c, rotations = move
-                                    if (r, c) not in temp_changes: temp_changes[(r, c)] = game_board.grid[r][c].conns.copy()
-                                    for _ in range(rotations): game_board.grid[r][c].conns = [game_board.grid[r][c].conns[-1]] + game_board.grid[r][c].conns[:-1]
-                                    hint_targets[(r, c)] = game_board.grid[r][c].conns.copy()
-                                    game_board.update_connectivity()
-                                    moves_found += 1
-                                else: break
-                            for (r, c), orig_conns in temp_changes.items(): game_board.grid[r][c].conns = orig_conns
-                            game_board.update_connectivity()
-                            if moves_found > 0: game_notif = f"HÃY XOAY {moves_found} Ô ĐANG NHẤP NHÁY!"; game_notif_alpha = 255
-                            else: game_notif = "ĐÃ ĐI ĐÚNG ĐƯỜNG!"; game_notif_alpha = 255
+                            move = get_hybrid_move(game_board)
+                            if move:
+                                r, c, rotations = move
+                                # Chỉ hiển thị 1 ô duy nhất để sếp xoay lần lượt
+                                hint_targets.clear() 
+                                hint_targets[(r, c)] = game_board.grid[r][c].conns.copy()
+                                for _ in range(rotations): 
+                                    hint_targets[(r, c)] = [hint_targets[(r, c)][-1]] + hint_targets[(r, c)][:-1]
+                                game_notif = "XEM Ô NHẤP NHÁY!"; game_notif_alpha = 255
+                            else:
+                                game_notif = "ĐƯỜNG ĐÃ THÔNG!"; game_notif_alpha = 255
                         elif is_left_click and btn_trade.is_clicked(mouse_pos, pygame.mouse.get_pressed()):
                             if trades_remaining != 0:
                                 trade_mode_active = not trade_mode_active; is_pickaxe_active = False 
@@ -530,14 +541,28 @@ def main():
                     ai_solving = False 
                 else:
                     current_time = pygame.time.get_ticks()
-                    if current_time - ai_timer >= 150: 
-                        move = get_best_single_rotation(game_board)
+                    if current_time - ai_timer >= 50:  
+                        move = get_hybrid_move(game_board)
                         
+                        # ==========================================
+                        # CƠ CHẾ ESCAPE: CHỐNG LẶP VÔ TẬN (ANTI-LOOP)
+                        # ==========================================
                         if move:
                             r_ai, c_ai, _ = move
                             node_ai = game_board.grid[r_ai][c_ai]
                             if node_ai.is_rock or node_ai.is_fixed:
                                 move = None 
+                            else:
+                                # 1. Ghi nhớ tọa độ ống vừa định xoay
+                                ai_recent_moves.append((r_ai, c_ai))
+                                if len(ai_recent_moves) > 8: ai_recent_moves.pop(0) # Chỉ nhớ 8 bước gần nhất
+                                
+                                # 2. Kích hoạt ESCAPE nếu 1 ống bị xoay quá 4 lần trong 8 bước
+                                if ai_recent_moves.count((r_ai, c_ai)) >= 4:
+                                    move = None # Hủy bỏ lệnh xoay hiện tại -> Ép AI chuyển sang chiến lược Fallback
+                                    ai_recent_moves.clear() # Xóa trí nhớ để làm lại từ đầu
+                                    game_notif = "ESCAPE: CHỐNG KẸT!" # Thông báo cho sếp biết AI đang tự cứu mình
+                                    game_notif_alpha = 255
 
                         if move:
                             row, col, rotations = move 
